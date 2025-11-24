@@ -1,0 +1,18 @@
+    flavorDimensions = ["appType"]
+    productFlavors {
+        develop {
+            dimension "appType"
+            applicationIdSuffix ".develop"
+        }
+        qa {
+            dimension "appType"
+            applicationIdSuffix ".qa"
+        }
+        preprod {
+            dimension "appType"
+            applicationIdSuffix ".preprod"
+        }
+        production {
+            dimension "appType"
+        }
+    }
