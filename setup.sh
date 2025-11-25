@@ -489,14 +489,6 @@ mv "$TEMP_JSON" "$PACKAGE_JSON"
 # Remove default App.js if it exists
 [ -f "App.js" ] && rm -f App.js
 
-# Install Expo modules for Android
-print_step "Installing Expo modules..."
-if npx install-expo-modules@latest --non-interactive; then
-  print_success "Expo modules installed"
-else
-  print_warning "Expo modules installation had issues, but continuing..."
-fi
-
 # iOS Setup
 echo ""
 echo -e "${BOLD}Configure iOS support?${NC}"
@@ -574,22 +566,6 @@ SWIFTEOF
   fi
 else
   print_info "Skipping iOS configuration."
-fi
-
-# Fix duplicate expo configuration in build.gradle (added by install-expo-modules)
-print_step "Cleaning up Android configuration..."
-if grep -q "Added by install-expo-modules" "$GRADLE_FILE"; then
-  # Remove the duplicate expo configuration block but keep autolinking
-  sed -i.bak '/\/\/ Added by install-expo-modules/,/bundleCommand = "export:embed"/d' "$GRADLE_FILE"
-  # Add back autolinking if it was removed
-  if ! grep -q "autolinkLibrariesWithApp" "$GRADLE_FILE"; then
-    sed -i.bak '/\/\/ nodeExecutableAndArgs = \["node"\]/a\
-\
-    /* Autolinking */\
-    autolinkLibrariesWithApp()' "$GRADLE_FILE"
-  fi
-  rm -f "${GRADLE_FILE}.bak"
-  print_success "Android configuration cleaned"
 fi
 
 # Add iOS scripts to package.json if iOS was configured
