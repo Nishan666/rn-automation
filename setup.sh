@@ -406,6 +406,12 @@ if ! grep -q "flavorDimensions" "$GRADLE_FILE"; then
   rm -f "$TEMP_FLAVORS_FILE"
 fi
 
+# Update namespace to match applicationId
+if grep -q "namespace" "$GRADLE_FILE"; then
+  sed -i.bak "s|namespace[[:space:]]*\"[^\"]*\"|namespace \"$ANDROID_APP_ID\"|" "$GRADLE_FILE"
+  rm -f "${GRADLE_FILE}.bak"
+fi
+
 # Update applicationId
 if grep -q "applicationId" "$GRADLE_FILE"; then
   sed -i.bak "s|applicationId[[:space:]]*\"[^\"]*\"|applicationId \"$ANDROID_APP_ID\"|" "$GRADLE_FILE"
@@ -445,6 +451,23 @@ EOF
 create_flavor_strings develop "${DISPLAY_NAME} Develop"
 create_flavor_strings qa "${DISPLAY_NAME} QA"
 create_flavor_strings preprod "${DISPLAY_NAME} Preprod"
+
+# Fix package structure to match applicationId
+print_info "Fixing package structure..."
+OLD_PACKAGE_PATH="android/app/src/main/java/com/${PROJECT_NAME}"
+NEW_PACKAGE_PATH="android/app/src/main/java/$(echo $ANDROID_APP_ID | tr '.' '/')"
+
+if [ -d "$OLD_PACKAGE_PATH" ] && [ "$OLD_PACKAGE_PATH" != "$NEW_PACKAGE_PATH" ]; then
+  mkdir -p "$(dirname "$NEW_PACKAGE_PATH")"
+  mv "$OLD_PACKAGE_PATH" "$NEW_PACKAGE_PATH" 2>/dev/null || true
+  
+  # Update package declarations in Kotlin files
+  find "$NEW_PACKAGE_PATH" -name "*.kt" -type f -exec sed -i.bak "s|package com.${PROJECT_NAME}|package ${ANDROID_APP_ID}|g" {} \;
+  find "$NEW_PACKAGE_PATH" -name "*.kt.bak" -delete
+  
+  # Clean up empty directories
+  find android/app/src/main/java/com -type d -empty -delete 2>/dev/null || true
+fi
 
 # Disable new architecture
 GRADLE_PROPS="android/gradle.properties"
@@ -587,6 +610,20 @@ if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
     
     mv "$TEMP_JSON2" "$PACKAGE_JSON"
   fi
+fi
+
+# Fix build.gradle after install-expo-modules
+print_info "Cleaning up build configuration..."
+if [ -f "$GRADLE_FILE" ]; then
+  # Remove duplicate autolinking entries added by install-expo-modules
+  if grep -q "Added by install-expo-modules" "$GRADLE_FILE"; then
+    awk '/\/\/ Added by install-expo-modules/,/bundleCommand = "export:embed"/{next}1' "$GRADLE_FILE" > "${GRADLE_FILE}.tmp"
+    mv "${GRADLE_FILE}.tmp" "$GRADLE_FILE"
+  fi
+  
+  # Also remove any duplicate entryFile/cliFile/bundleCommand after autolinkLibrariesWithApp
+  awk '/autolinkLibrariesWithApp\(\)/{print; getline; while(/^[[:space:]]*(entryFile|cliFile|bundleCommand)/) getline; print; next}1' "$GRADLE_FILE" > "${GRADLE_FILE}.tmp"
+  mv "${GRADLE_FILE}.tmp" "$GRADLE_FILE"
 fi
 
 # Optional icon setup
