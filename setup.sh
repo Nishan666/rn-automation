@@ -528,6 +528,27 @@ if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
     if npx install-expo-modules@latest --non-interactive 2>/dev/null; then
       print_success "Expo modules installed"
       
+      # Fix AppDelegate.swift compatibility issue
+      print_info "Fixing iOS AppDelegate..."
+      APPDELEGATE_SWIFT="ios/$IOS_PROJECT_NAME/AppDelegate.swift"
+      if [ -f "$APPDELEGATE_SWIFT" ]; then
+        cat > "$APPDELEGATE_SWIFT" << 'SWIFTEOF'
+import Expo
+import ExpoModulesCore
+
+@UIApplicationMain
+class AppDelegate: ExpoAppDelegate {
+  public override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+    super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+}
+SWIFTEOF
+        print_success "AppDelegate fixed"
+      fi
+      
       # Now try pod install
       print_info "Installing CocoaPods dependencies..."
       if npx pod-install --non-interactive 2>/dev/null; then
