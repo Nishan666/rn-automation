@@ -86,9 +86,8 @@ Update the `.env.*` files with your API endpoints and configuration:
 - **UI Components**: react-native-gesture-handler, react-native-safe-area-context, react-native-screens
 - **SVG Support**: react-native-svg
 - **Environment Config**: react-native-config
-- **Animations**: react-native-reanimated
 - **Utilities**: react-native-toast-message, @react-native-async-storage/async-storage, react-native-device-info
-- **Development**: ESLint, Prettier, TypeScript, Babel module resolver
+- **Development**: ESLint, Prettier, TypeScript, Babel module resolver, @types/react
 
 ## Requirements
 

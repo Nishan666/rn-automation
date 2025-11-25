@@ -276,7 +276,7 @@ echo -e "        • Navigation (@react-navigation)"
 echo -e "        • State management (Zustand)"
 echo -e "        • SVG support"
 echo -e "        • Environment config"
-echo -e "        • Animation (Reanimated)"
+
 echo -e "        • Utilities (Toast, AsyncStorage, DeviceInfo)"
 echo -e "        • Development tools (ESLint, Prettier, TypeScript)"
 echo -e "${CYAN}Step 4:${NC} Copy template files (configs, example modules)"
@@ -328,9 +328,6 @@ npm install --save-dev react-native-svg-transformer
 # Environment & configuration
 npm install react-native-config@latest
 
-# Animation (install specific version to avoid worklets validation issue)
-npm install react-native-reanimated@3.6.2
-
 # State management
 npm install zustand
 
@@ -339,6 +336,9 @@ npm install react-native-toast-message @react-native-async-storage/async-storage
 
 # Development tools
 npm install --save-dev --legacy-peer-deps eslint @eslint/js typescript-eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser eslint-config-prettier eslint-plugin-react prettier babel-preset-expo babel-plugin-module-resolver
+
+# TypeScript types
+npx expo install @types/react
 
 print_success "Dependencies installed"
 
@@ -489,6 +489,14 @@ mv "$TEMP_JSON" "$PACKAGE_JSON"
 # Remove default App.js if it exists
 [ -f "App.js" ] && rm -f App.js
 
+# Install Expo modules for Android
+print_step "Installing Expo modules..."
+if npx install-expo-modules@latest --non-interactive; then
+  print_success "Expo modules installed"
+else
+  print_warning "Expo modules installation had issues, but continuing..."
+fi
+
 # iOS Setup
 echo ""
 echo -e "${BOLD}Configure iOS support?${NC}"
@@ -547,6 +555,22 @@ else
   print_info "Skipping iOS configuration."
 fi
 
+# Fix duplicate expo configuration in build.gradle (added by install-expo-modules)
+print_step "Cleaning up Android configuration..."
+if grep -q "Added by install-expo-modules" "$GRADLE_FILE"; then
+  # Remove the duplicate expo configuration block but keep autolinking
+  sed -i.bak '/\/\/ Added by install-expo-modules/,/bundleCommand = "export:embed"/d' "$GRADLE_FILE"
+  # Add back autolinking if it was removed
+  if ! grep -q "autolinkLibrariesWithApp" "$GRADLE_FILE"; then
+    sed -i.bak '/\/\/ nodeExecutableAndArgs = \["node"\]/a\
+\
+    /* Autolinking */\
+    autolinkLibrariesWithApp()' "$GRADLE_FILE"
+  fi
+  rm -f "${GRADLE_FILE}.bak"
+  print_success "Android configuration cleaned"
+fi
+
 # Add iOS scripts to package.json if iOS was configured
 if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
   if [ "$(uname -s)" = "Darwin" ]; then
@@ -573,6 +597,10 @@ echo ""
 echo -e "${BOLD}Set up app icons for environments?${NC}"
 read -p "🎨 (y/n): " SETUP_ICONS
 if [ "$SETUP_ICONS" = "y" ] || [ "$SETUP_ICONS" = "Y" ]; then
+  # Remove default webp icons to avoid conflicts with PNG icons
+  print_info "Removing default webp icons..."
+  find android/app/src/main/res -name "*.webp" -delete 2>/dev/null || true
+  
   echo ""
   echo -e "${BOLD}Select icon files for each environment:${NC}"
   echo -e "${PURPLE}Please provide PNG files (recommended: 1024x1024)${NC}"
