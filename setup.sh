@@ -530,61 +530,39 @@ if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
     # Get iOS project name from Podfile
     IOS_PROJECT_NAME=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "$PROJECT_NAME")
   
-  # Update Podfile build configuration mappings
-  PODFILE="ios/Podfile"
-  if [ -f "$PODFILE" ] && ! grep -q "'Debug Develop'" "$PODFILE"; then
-    TEMP_PODFILE=$(mktemp)
-    sed "s/project .*/project '$IOS_PROJECT_NAME',\n  'Debug' => :debug,\n  'Release' => :release,\n  'Debug Develop' => :debug,\n  'Release Develop' => :release,\n  'Debug QA' => :debug,\n  'Release QA' => :release,\n  'Debug Preprod' => :debug,\n  'Release Preprod' => :release/" "$PODFILE" > "$TEMP_PODFILE"
-    mv "$TEMP_PODFILE" "$PODFILE"
-  fi
   
-    # Install Expo modules first to set up autolinking
-    print_info "Installing Expo modules..."
-    if npx install-expo-modules@latest --non-interactive 2>/dev/null; then
-      print_success "Expo modules installed"
-      
-      # Fix AppDelegate.swift compatibility issue
-      print_info "Fixing iOS AppDelegate..."
-      APPDELEGATE_SWIFT="ios/$IOS_PROJECT_NAME/AppDelegate.swift"
-      if [ -f "$APPDELEGATE_SWIFT" ]; then
-        cat > "$APPDELEGATE_SWIFT" << 'SWIFTEOF'
-import Expo
-import ExpoModulesCore
-
-@UIApplicationMain
-class AppDelegate: ExpoAppDelegate {
-  public override func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
-  ) -> Bool {
-    super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-}
-SWIFTEOF
-        print_success "AppDelegate fixed"
-      fi
-      
-      # Now try pod install
-      print_info "Installing CocoaPods dependencies..."
-      if npx pod-install --non-interactive 2>/dev/null; then
-        print_success "iOS configured"
-      else
-        print_warning "Pod install failed. Trying manual approach..."
-        if cd ios && pod install --repo-update 2>/dev/null && cd ..; then
-          print_success "iOS configured with manual pod install"
-        else
-          print_warning "iOS setup incomplete. Manual steps required:"
-          print_info "  1. cd $PROJECT_DIR/$PROJECT_NAME"
-          print_info "  2. npx install-expo-modules@latest"
-          print_info "  3. cd ios && pod install"
-        fi
-      fi
+  # Source iOS flavor setup script
+  source "$SCRIPT_DIR/ios_flavor_setup.sh"
+  
+  # Setup iOS product flavors
+  setup_ios_flavors "$IOS_PROJECT_NAME" "$ANDROID_APP_ID" "$DISPLAY_NAME"
+  
+  # Install Expo modules
+  print_info "Installing Expo modules..."
+  if npx install-expo-modules@latest --non-interactive 2>/dev/null; then
+    print_success "Expo modules installed"
+    
+    # Pod install
+    print_info "Installing CocoaPods dependencies..."
+    if npx pod-install --non-interactive 2>/dev/null; then
+      print_success "iOS configured"
     else
-      print_warning "Expo modules installation failed."
-      print_info "iOS setup skipped. To set up iOS manually:"
-      print_info "  1. cd $PROJECT_DIR/$PROJECT_NAME"
-      print_info "  2. npx install-expo-modules@latest"
-      print_info "  3. cd ios && pod install"
+      print_warning "Pod install failed. Trying manual approach..."
+      if cd ios && pod install --repo-update 2>/dev/null && cd ..; then
+        print_success "iOS configured with manual pod install"
+      else
+        print_warning "iOS setup incomplete. Manual steps required:"
+        print_info "  1. cd $PROJECT_DIR/$PROJECT_NAME"
+        print_info "  2. npx install-expo-modules@latest"
+        print_info "  3. cd ios && pod install"
+      fi
+    fi
+  else
+    print_warning "Expo modules installation failed."
+    print_info "iOS setup skipped. To set up iOS manually:"
+    print_info "  1. cd $PROJECT_DIR/$PROJECT_NAME"
+    print_info "  3. cd ios && pod install"
+    print_info "  2. npx install-expo-modules@latest"
     fi
   fi
 else
