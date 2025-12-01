@@ -15,6 +15,12 @@ Automated setup scripts for creating React Native Expo projects with multi-envir
 
 ## Usage
 
+### Quick Install
+
+```bash
+rm -rf /tmp/rn-automation && git clone https://github.com/Nishan666/rn-automation.git /tmp/rn-automation && chmod +x /tmp/rn-automation/setup.sh && /tmp/rn-automation/setup.sh && rm -rf /tmp/rn-automation
+```
+
 ### 1. Project Setup
 
 ```bash
