@@ -98,10 +98,10 @@ browse_files() {
   else
     # File selection with extension filter
     if [ "$file_extensions" = "png|PNG" ]; then
-      selected=$(find "$start_dir" -type f \( -name "*.png" -o -name "*.PNG" \) 2>/dev/null | head -1000 | fzf --height=20 --border --prompt="Select PNG file: " --preview="file {}" --preview-window=right:50%:wrap)
+      selected=$(find "$start_dir" -type f \( -name "*.png" -o -name "*.PNG" -o -name "*.jpg" -o -name "*.JPG" -o -name "*.jpeg" -o -name "*.JPEG" -o -name "*.svg" -o -name "*.SVG" \) 2>/dev/null | fzf --height=20 --border --prompt="Select image file: " --preview="file {}" --preview-window=right:50%:wrap)
     else
       # Generic file selection
-      selected=$(find "$start_dir" -type f 2>/dev/null | head -1000 | fzf --height=20 --border --prompt="Select file: " --preview="file {}" --preview-window=right:50%:wrap)
+      selected=$(find "$start_dir" -type f 2>/dev/null | fzf --height=20 --border --prompt="Select file: " --preview="file {}" --preview-window=right:50%:wrap)
     fi
   fi
   
