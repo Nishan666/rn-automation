@@ -78,18 +78,22 @@ setup_icons() {
       mkdir -p "$ios_appicon_dir"
       cp "$icon_path" "$ios_appicon_dir/icon-1024.png"
       
-      # Create basic Contents.json
+      # FIXED: Create correct Contents.json for iOS
+      # Changed from "ios-marketing" idiom to "universal" with "platform": "ios"
       cat > "$ios_appicon_dir/Contents.json" << 'EOF'
 {
   "images": [
     {
-      "idiom": "ios-marketing",
-      "size": "1024x1024",
       "filename": "icon-1024.png",
-      "scale": "1x"
+      "idiom": "universal",
+      "platform": "ios",
+      "size": "1024x1024"
     }
   ],
-  "info": { "version": 1, "author": "xcode" }
+  "info": {
+    "author": "xcode",
+    "version": 1
+  }
 }
 EOF
     fi
@@ -537,6 +541,77 @@ if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
   # Setup iOS product flavors
   setup_ios_flavors "$IOS_PROJECT_NAME" "$ANDROID_APP_ID" "$DISPLAY_NAME"
   
+  # Fix iOS icon configuration and display names for each environment
+  print_info "Configuring iOS icon settings and display names for each environment..."
+  if command -v ruby >/dev/null 2>&1; then
+    IOS_PROJECT_NAME_ENV="$IOS_PROJECT_NAME" DISPLAY_NAME_ENV="$DISPLAY_NAME" ruby - <<'RUBYEOF'
+require 'fileutils'
+begin
+  require 'xcodeproj'
+rescue LoadError
+  system('gem install xcodeproj --user-install')
+  Gem.clear_paths
+  require 'xcodeproj'
+end
+
+project_name = ENV['IOS_PROJECT_NAME_ENV']
+display_name = ENV['DISPLAY_NAME_ENV'] || project_name
+project_path = "ios/#{project_name}.xcodeproj"
+exit 0 unless File.exist?(project_path)
+
+project = Xcodeproj::Project.open(project_path)
+target = project.targets.find { |t| t.name == project_name }
+exit 0 unless target
+
+# Update icon configuration and display name for each build configuration
+target.build_configurations.each do |config|
+  case config.name
+  when /Debug Develop|Release Develop/
+    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconDev'
+    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} Develop"
+  when /Debug QA|Release QA/
+    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconQA'
+    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} QA"
+  when /Debug Preprod|Release Preprod/
+    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconPreprod'
+    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} Preprod"
+  when /Debug|Release/
+    # Production configurations keep AppIcon (default) and base display name
+    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon' unless config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME']
+    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = display_name unless config.build_settings['INFOPLIST_KEY_CFBundleDisplayName']
+  end
+end
+
+# Also update project-level configurations
+project.build_configurations.each do |config|
+  case config.name
+  when /Debug Develop|Release Develop/
+    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconDev'
+    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} Develop"
+  when /Debug QA|Release QA/
+    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconQA'
+    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} QA"
+  when /Debug Preprod|Release Preprod/
+    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconPreprod'
+    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} Preprod"
+  when /Debug|Release/
+    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon' unless config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME']
+    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = display_name unless config.build_settings['INFOPLIST_KEY_CFBundleDisplayName']
+  end
+end
+
+project.save
+puts "Updated icon and display name configurations for #{target.build_configurations.count} build configurations"
+RUBYEOF
+    if [ $? -eq 0 ]; then
+      print_success "iOS icon configurations updated"
+    else
+      print_warning "Failed to update iOS icon configurations automatically"
+    fi
+  else
+    print_warning "Ruby not found. Skipping automatic icon configuration. You'll need to set ASSETCATALOG_COMPILER_APPICON_NAME manually in Xcode."
+  fi
+  
   # Install Expo modules
   print_info "Installing Expo modules..."
   if npx install-expo-modules@latest --non-interactive 2>/dev/null; then
@@ -607,6 +682,12 @@ fi
 # Optional icon setup
 echo ""
 echo -e "${BOLD}Set up app icons for environments?${NC}"
+if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
+  if [ "$(uname -s)" = "Darwin" ]; then
+    echo -e "${GREEN}✅ iOS icon configurations are already set up for each environment${NC}"
+    echo -e "${PURPLE}   Each environment will use its own icon automatically${NC}"
+  fi
+fi
 read -p "🎨 (y/n): " SETUP_ICONS
 if [ "$SETUP_ICONS" = "y" ] || [ "$SETUP_ICONS" = "Y" ]; then
   # Remove default webp icons to avoid conflicts with PNG icons
@@ -634,6 +715,12 @@ if [ "$SETUP_ICONS" = "y" ] || [ "$SETUP_ICONS" = "Y" ]; then
     fi
     echo ""
   done
+  
+  if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+      print_success "Icon setup complete! Each iOS environment is configured to use its own icon."
+    fi
+  fi
 else
   print_info "Skipping icon setup."
 fi
@@ -641,7 +728,7 @@ fi
 echo ""
 echo -e "${GREEN}${BOLD}===================================${NC}"
 echo -e "${GREEN}${BOLD}🎉 Setup complete!${NC}"
-echo -e "${GREEN}${BOLD}==================================${NC}"
+echo -e "${GREEN}${BOLD}===================================${NC}"
 echo ""
 echo ""
 echo -e "${BOLD}📋 Next steps:${NC}"
