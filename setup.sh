@@ -543,6 +543,20 @@ if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
   
   # Fix iOS icon configuration and display names for each environment
   print_info "Configuring iOS icon settings and display names for each environment..."
+  
+  # Update Info.plist with display name variable
+  INFO_PLIST="ios/$IOS_PROJECT_NAME/Info.plist"
+  if [ -f "$INFO_PLIST" ]; then
+    if ! grep -q "CFBundleDisplayName" "$INFO_PLIST"; then
+      # Add CFBundleDisplayName if it doesn't exist
+      /usr/libexec/PlistBuddy -c "Add :CFBundleDisplayName string '\$(INFOPLIST_KEY_CFBundleDisplayName)'" "$INFO_PLIST" 2>/dev/null || \
+      /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName '\$(INFOPLIST_KEY_CFBundleDisplayName)'" "$INFO_PLIST" 2>/dev/null
+    else
+      # Update existing CFBundleDisplayName
+      /usr/libexec/PlistBuddy -c "Set :CFBundleDisplayName '\$(INFOPLIST_KEY_CFBundleDisplayName)'" "$INFO_PLIST" 2>/dev/null
+    fi
+  fi
+  
   if command -v ruby >/dev/null 2>&1; then
     IOS_PROJECT_NAME_ENV="$IOS_PROJECT_NAME" DISPLAY_NAME_ENV="$DISPLAY_NAME" ruby - <<'RUBYEOF'
 require 'fileutils'
