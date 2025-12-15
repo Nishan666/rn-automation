@@ -145,12 +145,31 @@ clear
 print_header
 
 while true; do
-  echo -e "${BOLD}What is your project name?${NC}"
+  echo -e "${BOLD}What is your project name? (folder/package name - alphanumeric only)${NC}"
+  echo -e "${PURPLE}Used for: folder name, package identifier (com.projectname)${NC}"
+  echo -e "${YELLOW}Example: MyApp or myapp${NC}"
   read -p "📝 " PROJECT_NAME
   if [ -z "$PROJECT_NAME" ]; then
     print_error "Project name cannot be empty"
   elif [ ${#PROJECT_NAME} -lt 2 ]; then
     print_error "Project name must be at least 2 characters"
+  elif ! [[ "$PROJECT_NAME" =~ ^[a-zA-Z0-9]+$ ]]; then
+    print_error "Project name must contain only letters and numbers (no spaces, hyphens, or special characters)"
+  else
+    break
+  fi
+done
+
+echo ""
+while true; do
+  echo -e "${BOLD}What is your app name? (display name - can contain spaces, -, _)${NC}"
+  echo -e "${PURPLE}This will be shown to users on their devices${NC}"
+  echo -e "${YELLOW}Example: My App${NC}"
+  read -p "📱 " APP_NAME
+  if [ -z "$APP_NAME" ]; then
+    print_error "App name cannot be empty"
+  elif [ ${#APP_NAME} -lt 2 ]; then
+    print_error "App name must be at least 2 characters"
   else
     break
   fi
@@ -236,16 +255,51 @@ esac
 
 slugify() {
   local input="$1"
-  printf '%s' "$input" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9'
+  # Handle all naming patterns:
+  # 1. Insert dots before uppercase letters (camelCase/PascalCase)
+  # 2. Replace spaces, hyphens, underscores with dots
+  # 3. Convert to lowercase
+  # 4. Remove consecutive dots
+  # 5. Remove leading/trailing dots
+  # 6. Keep only alphanumeric and dots
+  echo "$input" | \
+    sed 's/\([A-Z]\)/\.\1/g' | \
+    tr ' _-' '.' | \
+    tr '[:upper:]' '[:lower:]' | \
+    sed 's/\.\+/./g' | \
+    sed 's/^\.//g' | \
+    sed 's/\.$//g' | \
+    tr -cd 'a-z0-9.'
 }
 
 echo ""
-echo -e "${BOLD}Android application ID (optional)${NC}"
-echo -e "${PURPLE}Press Enter to auto-generate: com.$(slugify "$PROJECT_NAME")${NC}"
-read -p "📱 " CUSTOM_APP_ID
+echo -e "${BOLD}Android application ID (package name)${NC}"
+echo -e "${PURPLE}Auto-generated: com.$(slugify "$PROJECT_NAME")${NC}"
+echo -e "  ${YELLOW}1)${NC} Use auto-generated"
+echo -e "  ${YELLOW}2)${NC} Enter custom package name"
+read -p "📱 Enter choice (1-2): " PACKAGE_CHOICE
 
-if [ -n "$CUSTOM_APP_ID" ]; then
-  ANDROID_APP_ID="$CUSTOM_APP_ID"
+if [ "$PACKAGE_CHOICE" = "2" ]; then
+  while true; do
+    echo ""
+    echo -e "${BOLD}Enter custom Android package name:${NC}"
+    echo -e "${YELLOW}Example: com.company.myapp${NC}"
+    read -p "📦 " CUSTOM_APP_ID
+    if [ -z "$CUSTOM_APP_ID" ]; then
+      print_error "Package name cannot be empty"
+    else
+      # Convert to lowercase
+      CUSTOM_APP_ID=$(echo "$CUSTOM_APP_ID" | tr '[:upper:]' '[:lower:]')
+      # Validate format
+      if [[ "$CUSTOM_APP_ID" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
+        ANDROID_APP_ID="$CUSTOM_APP_ID"
+        print_success "Package name set: $ANDROID_APP_ID"
+        break
+      else
+        print_error "Invalid package name format. Must be like: com.company.appname"
+      fi
+    fi
+  done
 else
   GENERATED_SLUG="$(slugify "$PROJECT_NAME")"
   if [ -z "$GENERATED_SLUG" ]; then
@@ -253,9 +307,10 @@ else
     exit 1
   fi
   ANDROID_APP_ID="com.${GENERATED_SLUG}"
+  print_success "Using auto-generated: $ANDROID_APP_ID"
 fi
 
-DISPLAY_NAME="$PROJECT_NAME"
+DISPLAY_NAME="$APP_NAME"
 DEVELOP_APP_ID="${ANDROID_APP_ID}.develop"
 QA_APP_ID="${ANDROID_APP_ID}.qa"
 PREPROD_APP_ID="${ANDROID_APP_ID}.preprod"
@@ -264,7 +319,8 @@ echo ""
 echo -e "${CYAN}${BOLD}===================================${NC}"
 echo -e "${CYAN}${BOLD}📋 Configuration Summary${NC}"
 echo -e "${CYAN}${BOLD}===================================${NC}"
-echo -e "${BOLD}Project:${NC} $DISPLAY_NAME"
+echo -e "${BOLD}Project Name:${NC} $PROJECT_NAME"
+echo -e "${BOLD}App Name:${NC} $DISPLAY_NAME"
 echo -e "${BOLD}Android ID:${NC} $ANDROID_APP_ID"
 echo -e "  ${YELLOW}• Develop:${NC} $DEVELOP_APP_ID"
 echo -e "  ${YELLOW}• QA:${NC} $QA_APP_ID"
@@ -458,15 +514,17 @@ create_flavor_strings preprod "${DISPLAY_NAME} Preprod"
 
 # Fix package structure to match applicationId
 print_info "Fixing package structure..."
-OLD_PACKAGE_PATH="android/app/src/main/java/com/${PROJECT_NAME}"
+# Expo creates package path with lowercase project name
+EXPO_PACKAGE_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
+OLD_PACKAGE_PATH="android/app/src/main/java/com/${EXPO_PACKAGE_NAME}"
 NEW_PACKAGE_PATH="android/app/src/main/java/$(echo $ANDROID_APP_ID | tr '.' '/')"
 
 if [ -d "$OLD_PACKAGE_PATH" ] && [ "$OLD_PACKAGE_PATH" != "$NEW_PACKAGE_PATH" ]; then
   mkdir -p "$(dirname "$NEW_PACKAGE_PATH")"
   mv "$OLD_PACKAGE_PATH" "$NEW_PACKAGE_PATH" 2>/dev/null || true
   
-  # Update package declarations in Kotlin files
-  find "$NEW_PACKAGE_PATH" -name "*.kt" -type f -exec sed -i.bak "s|package com.${PROJECT_NAME}|package ${ANDROID_APP_ID}|g" {} \;
+  # Update package declarations in Kotlin files (Expo uses lowercase package name)
+  find "$NEW_PACKAGE_PATH" -name "*.kt" -type f -exec sed -i.bak "s|package com\.${EXPO_PACKAGE_NAME}|package ${ANDROID_APP_ID}|g" {} \;
   find "$NEW_PACKAGE_PATH" -name "*.kt.bak" -delete
   
   # Clean up empty directories
