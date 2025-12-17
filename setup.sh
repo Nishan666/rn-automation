@@ -69,23 +69,192 @@ setup_icons() {
 
   # Copy icon to iOS (macOS only)
   if [ "$(uname -s)" = "Darwin" ]; then
-    local ios_project=$(ls ios/*.xcodeproj 2>/dev/null | head -1 || true)
-    if [ -n "$ios_project" ]; then
+    # Find .xcodeproj directory (not files or other directories)
+    local ios_project=$(find ios -maxdepth 1 -name "*.xcodeproj" -type d 2>/dev/null | head -1 || true)
+    if [ -z "$ios_project" ]; then
+      # Fallback: try to get from Podfile
+      ios_project=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "")
+      if [ -n "$ios_project" ]; then
+        ios_project="ios/$ios_project.xcodeproj"
+      fi
+    fi
+    if [ -n "$ios_project" ] && [ -d "$ios_project" ]; then
       local ios_name=$(basename "$ios_project" .xcodeproj)
       local ios_assets_dir="ios/$ios_name/Images.xcassets"
       local ios_appicon_dir="$ios_assets_dir/$ios_appicon_set"
+      
+      # Safety check: ensure we're not using the wrong directory
+      if [ "$ios_name" = "project.pbxproj" ]; then
+        echo "  ⚠ Warning: Detected wrong project name. Trying to find correct project..." >&2
+        # Try to get from Podfile
+        local correct_name=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "")
+        if [ -n "$correct_name" ] && [ -d "ios/$correct_name.xcodeproj" ]; then
+          ios_name="$correct_name"
+          ios_assets_dir="ios/$ios_name/Images.xcassets"
+          ios_appicon_dir="$ios_assets_dir/$ios_appicon_set"
+          echo "  ✓ Using correct project name: $ios_name" >&2
+        fi
+      fi
 
       mkdir -p "$ios_appicon_dir"
-      cp "$icon_path" "$ios_appicon_dir/icon-1024.png"
       
-      # FIXED: Create correct Contents.json for iOS
-      # Changed from "ios-marketing" idiom to "universal" with "platform": "ios"
+      # Check if icons exist in wrong location and move them
+      local wrong_location="ios/project.pbxproj/Images.xcassets/$ios_appicon_set"
+      if [ -d "$wrong_location" ] && [ -f "$wrong_location/icon-1024.png" ]; then
+        echo "  ℹ Found icons in wrong location, moving to correct location..." >&2
+        mkdir -p "$ios_appicon_dir"
+        cp "$wrong_location"/* "$ios_appicon_dir/" 2>/dev/null || true
+      fi
+      
+      # Copy source icon
+      if ! cp "$icon_path" "$ios_appicon_dir/icon-1024-source.png" 2>/dev/null; then
+        echo "  ✗ Failed to copy icon to iOS directory" >&2
+        return 1
+      fi
+      
+      echo "  Generating all required iOS icon sizes..."
+      
+      # Generate all required icon sizes using sips (macOS built-in)
+      if command -v sips >/dev/null 2>&1; then
+        # iPhone icons
+        sips -z 40 40 "$icon_path" --out "$ios_appicon_dir/icon-20x20@2x.png" >/dev/null 2>&1
+        sips -z 60 60 "$icon_path" --out "$ios_appicon_dir/icon-20x20@3x.png" >/dev/null 2>&1
+        sips -z 58 58 "$icon_path" --out "$ios_appicon_dir/icon-29x29@2x.png" >/dev/null 2>&1
+        sips -z 87 87 "$icon_path" --out "$ios_appicon_dir/icon-29x29@3x.png" >/dev/null 2>&1
+        sips -z 80 80 "$icon_path" --out "$ios_appicon_dir/icon-40x40@2x.png" >/dev/null 2>&1
+        sips -z 120 120 "$icon_path" --out "$ios_appicon_dir/icon-40x40@3x.png" >/dev/null 2>&1
+        sips -z 120 120 "$icon_path" --out "$ios_appicon_dir/icon-60x60@2x.png" >/dev/null 2>&1
+        sips -z 180 180 "$icon_path" --out "$ios_appicon_dir/icon-60x60@3x.png" >/dev/null 2>&1
+        
+        # iPad icons
+        sips -z 20 20 "$icon_path" --out "$ios_appicon_dir/icon-20x20~ipad.png" >/dev/null 2>&1
+        sips -z 40 40 "$icon_path" --out "$ios_appicon_dir/icon-20x20~ipad@2x.png" >/dev/null 2>&1
+        sips -z 29 29 "$icon_path" --out "$ios_appicon_dir/icon-29x29~ipad.png" >/dev/null 2>&1
+        sips -z 58 58 "$icon_path" --out "$ios_appicon_dir/icon-29x29~ipad@2x.png" >/dev/null 2>&1
+        sips -z 40 40 "$icon_path" --out "$ios_appicon_dir/icon-40x40~ipad.png" >/dev/null 2>&1
+        sips -z 80 80 "$icon_path" --out "$ios_appicon_dir/icon-40x40~ipad@2x.png" >/dev/null 2>&1
+        sips -z 76 76 "$icon_path" --out "$ios_appicon_dir/icon-76x76~ipad.png" >/dev/null 2>&1
+        sips -z 152 152 "$icon_path" --out "$ios_appicon_dir/icon-76x76~ipad@2x.png" >/dev/null 2>&1
+        sips -z 167 167 "$icon_path" --out "$ios_appicon_dir/icon-83.5x83.5~ipad@2x.png" >/dev/null 2>&1
+        
+        # App Store icon (1024x1024)
+        cp "$icon_path" "$ios_appicon_dir/icon-1024.png"
+        
+        echo "  ✓ Generated all 18 required icon sizes"
+      else
+        echo "  ⚠ Warning: sips not found, only copying 1024x1024 icon" >&2
+        cp "$icon_path" "$ios_appicon_dir/icon-1024.png"
+      fi
+      
+      # Create complete Contents.json with all required sizes
       cat > "$ios_appicon_dir/Contents.json" << 'EOF'
 {
   "images": [
     {
+      "filename": "icon-20x20@2x.png",
+      "idiom": "iphone",
+      "scale": "2x",
+      "size": "20x20"
+    },
+    {
+      "filename": "icon-20x20@3x.png",
+      "idiom": "iphone",
+      "scale": "3x",
+      "size": "20x20"
+    },
+    {
+      "filename": "icon-29x29@2x.png",
+      "idiom": "iphone",
+      "scale": "2x",
+      "size": "29x29"
+    },
+    {
+      "filename": "icon-29x29@3x.png",
+      "idiom": "iphone",
+      "scale": "3x",
+      "size": "29x29"
+    },
+    {
+      "filename": "icon-40x40@2x.png",
+      "idiom": "iphone",
+      "scale": "2x",
+      "size": "40x40"
+    },
+    {
+      "filename": "icon-40x40@3x.png",
+      "idiom": "iphone",
+      "scale": "3x",
+      "size": "40x40"
+    },
+    {
+      "filename": "icon-60x60@2x.png",
+      "idiom": "iphone",
+      "scale": "2x",
+      "size": "60x60"
+    },
+    {
+      "filename": "icon-60x60@3x.png",
+      "idiom": "iphone",
+      "scale": "3x",
+      "size": "60x60"
+    },
+    {
+      "filename": "icon-20x20~ipad.png",
+      "idiom": "ipad",
+      "scale": "1x",
+      "size": "20x20"
+    },
+    {
+      "filename": "icon-20x20~ipad@2x.png",
+      "idiom": "ipad",
+      "scale": "2x",
+      "size": "20x20"
+    },
+    {
+      "filename": "icon-29x29~ipad.png",
+      "idiom": "ipad",
+      "scale": "1x",
+      "size": "29x29"
+    },
+    {
+      "filename": "icon-29x29~ipad@2x.png",
+      "idiom": "ipad",
+      "scale": "2x",
+      "size": "29x29"
+    },
+    {
+      "filename": "icon-40x40~ipad.png",
+      "idiom": "ipad",
+      "scale": "1x",
+      "size": "40x40"
+    },
+    {
+      "filename": "icon-40x40~ipad@2x.png",
+      "idiom": "ipad",
+      "scale": "2x",
+      "size": "40x40"
+    },
+    {
+      "filename": "icon-76x76~ipad.png",
+      "idiom": "ipad",
+      "scale": "1x",
+      "size": "76x76"
+    },
+    {
+      "filename": "icon-76x76~ipad@2x.png",
+      "idiom": "ipad",
+      "scale": "2x",
+      "size": "76x76"
+    },
+    {
+      "filename": "icon-83.5x83.5~ipad@2x.png",
+      "idiom": "ipad",
+      "scale": "2x",
+      "size": "83.5x83.5"
+    },
+    {
       "filename": "icon-1024.png",
-      "idiom": "universal",
+      "idiom": "ios-marketing",
       "platform": "ios",
       "size": "1024x1024"
     }
@@ -96,6 +265,7 @@ setup_icons() {
   }
 }
 EOF
+      echo "  ✓ Contents.json created with all required icon sizes"
     fi
   fi
 
@@ -721,16 +891,25 @@ if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
   if [ "$(uname -s)" = "Darwin" ]; then
     IOS_PROJECT_NAME_FOR_SCRIPTS=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "$PROJECT_NAME")
     
+    # Copy clean script to project for easy access
+    if [ -f "$SCRIPT_DIR/utils/clean_ios_build.sh" ]; then
+      mkdir -p scripts
+      cp "$SCRIPT_DIR/utils/clean_ios_build.sh" scripts/clean_ios_build.sh
+      chmod +x scripts/clean_ios_build.sh
+    fi
+    
     TEMP_JSON2="${PACKAGE_JSON}.tmp2"
     cat "$PACKAGE_JSON" | jq \
       --arg ios_dev "expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS} Develop' --configuration 'Debug Develop'" \
       --arg ios_qa "expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS} QA' --configuration 'Debug QA'" \
       --arg ios_preprod "expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS} Preprod' --configuration 'Debug Preprod'" \
       --arg ios_prod "expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS}' --configuration 'Debug'" \
+      --arg ios_clean "bash scripts/clean_ios_build.sh" \
       '.scripts["ios:dev"] = $ios_dev |
        .scripts["ios:qa"] = $ios_qa |
        .scripts["ios:preprod"] = $ios_preprod |
-       .scripts["ios:prod"] = $ios_prod' \
+       .scripts["ios:prod"] = $ios_prod |
+       .scripts["ios:clean"] = $ios_clean' \
       > "$TEMP_JSON2"
     
     mv "$TEMP_JSON2" "$PACKAGE_JSON"
@@ -777,13 +956,16 @@ if [ "$SETUP_ICONS" = "y" ] || [ "$SETUP_ICONS" = "Y" ]; then
     
     if [ $? -eq 0 ] && [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
       print_step "Setting up $env icons..."
+      echo ""
       if setup_icons "$env" "$ICON_PATH"; then
         print_success "Icons set up for $env environment"
       else
         print_warning "Icon setup failed for $env"
+        print_info "   Please check the error messages above"
       fi
     else
       print_warning "No icon selected for $env environment. Skipping."
+      print_info "   You can set up icons later using: ./setup_ios_icons.sh"
     fi
     echo ""
   done
@@ -791,10 +973,67 @@ if [ "$SETUP_ICONS" = "y" ] || [ "$SETUP_ICONS" = "Y" ]; then
   if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
     if [ "$(uname -s)" = "Darwin" ]; then
       print_success "Icon setup complete! Each iOS environment is configured to use its own icon."
+      echo ""
+      
+      # Verify icons were actually copied
+      print_info "Verifying icon setup..."
+      IOS_PROJECT_CHECK=$(find ios -maxdepth 1 -name "*.xcodeproj" -type d 2>/dev/null | head -1 || true)
+      if [ -z "$IOS_PROJECT_CHECK" ]; then
+        # Fallback: try to get from Podfile
+        IOS_NAME_CHECK=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "$PROJECT_NAME")
+      else
+        IOS_NAME_CHECK=$(basename "$IOS_PROJECT_CHECK" .xcodeproj)
+      fi
+      if [ -n "$IOS_NAME_CHECK" ]; then
+        MISSING_ICONS=0
+        for icon_set in "AppIcon" "AppIconDev" "AppIconQA" "AppIconPreprod"; do
+          if [ ! -f "ios/$IOS_NAME_CHECK/Images.xcassets/$icon_set.appiconset/icon-1024.png" ]; then
+            MISSING_ICONS=$((MISSING_ICONS + 1))
+            print_warning "Icon missing: $icon_set.appiconset/icon-1024.png"
+          fi
+        done
+        
+        if [ $MISSING_ICONS -eq 0 ]; then
+          print_success "All icon files verified!"
+        else
+          print_warning "$MISSING_ICONS icon file(s) are missing. Icons may not appear correctly."
+        fi
+      fi
+      
+      echo ""
+      print_info "⚠️  CRITICAL: Clean the build folder before building for icons to appear!"
+      echo ""
+      echo -e "${YELLOW}Would you like to clean the iOS build folder now?${NC}"
+      echo -e "${PURPLE}(This is required for icons to appear when you build)${NC}"
+      read -p "🧹 Clean now? (y/n): " CLEAN_NOW
+      
+      if [ "$CLEAN_NOW" = "y" ] || [ "$CLEAN_NOW" = "Y" ]; then
+        print_step "Cleaning iOS build folder..."
+        if [ -f "scripts/clean_ios_build.sh" ]; then
+          bash scripts/clean_ios_build.sh
+        elif [ -f "$SCRIPT_DIR/utils/clean_ios_build.sh" ]; then
+          bash "$SCRIPT_DIR/utils/clean_ios_build.sh" "$PWD"
+        else
+          print_warning "Clean script not found. Please run manually: npm run ios:clean"
+        fi
+        print_success "Build folder cleaned!"
+      else
+        print_warning "Build folder not cleaned. Icons may not appear until you clean manually."
+        print_info "   Run from project directory: ${GREEN}npm run ios:clean${NC}"
+      fi
+      
+      echo ""
+      print_info "After setup, build with: ${GREEN}npm run ios:dev${NC}"
     fi
   fi
 else
   print_info "Skipping icon setup."
+  if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+      echo ""
+      print_info "💡 Tip: You can set up icons later by running: ./setup_ios_icons.sh"
+    fi
+  fi
 fi
 
 echo ""
@@ -807,7 +1046,18 @@ echo -e "${BOLD}📋 Next steps:${NC}"
 echo -e "  ${CYAN}1.${NC} cd $PROJECT_DIR/$PROJECT_NAME"
 echo -e "  ${CYAN}2.${NC} Update .env files with your API endpoints"
 echo -e "  ${CYAN}3.${NC} Review android/app/build.gradle for any additional tweaks"
-echo -e "  ${CYAN}4.${NC} Re-run setup script to generate icons for other environments"
+if [ "$SETUP_ICONS" = "y" ] || [ "$SETUP_ICONS" = "Y" ]; then
+  if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+      echo -e "  ${CYAN}4.${NC} Clean iOS build: ${GREEN}npm run ios:clean${NC} (required for icons to appear)"
+      echo -e "  ${CYAN}5.${NC} Build and run: ${GREEN}npm run ios:dev${NC}"
+    fi
+  else
+    echo -e "  ${CYAN}4.${NC} Re-run setup script to generate icons for other environments"
+  fi
+else
+  echo -e "  ${CYAN}4.${NC} Re-run setup script to generate icons for other environments"
+fi
 echo ""
 echo "Example modules created:"
 echo "  - src/modules/splash/ (with Zustand store and API)"
@@ -827,6 +1077,7 @@ echo ""
 if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
   if [ "$(uname -s)" = "Darwin" ]; then
 echo -e "${YELLOW}iOS:${NC}"
+echo -e "  ${GREEN}npm run ios:clean${NC}            # Clean build folder (run after icon changes)"
 echo -e "  ${GREEN}npm run ios:dev${NC}              # Development build"
 echo -e "  ${GREEN}npm run ios:qa${NC}               # QA build"
 echo -e "  ${GREEN}npm run ios:preprod${NC}          # Pre-production build"

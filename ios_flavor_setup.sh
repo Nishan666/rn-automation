@@ -53,22 +53,25 @@ mkdir -p "$IOS_ASSETS_DIR"
  for icon_set in "AppIcon" "AppIconDev" "AppIconQA" "AppIconPreprod"; do
   icon_dir="$IOS_ASSETS_DIR/$icon_set.appiconset"
   mkdir -p "$icon_dir"
+   # Create placeholder Contents.json (will be updated when icons are set up)
    cat > "$icon_dir/Contents.json" << 'ICONEOF'
 {
-"images": [
-  {
-    "filename": "icon-1024.png",
-    "idiom": "universal",
-    "platform": "ios",
-    "size": "1024x1024"
+  "images": [
+    {
+      "filename": "icon-1024.png",
+      "idiom": "ios-marketing",
+      "platform": "ios",
+      "size": "1024x1024"
+    }
+  ],
+  "info": {
+    "author": "xcode",
+    "version": 1
   }
-],
-"info": {
-  "author": "xcode",
-  "version": 1
-}
 }
 ICONEOF
+   # Note: This is just a placeholder. The complete Contents.json with all sizes
+   # will be created when icons are set up via setup.sh or setup_ios_icons.sh
 done
 print_success "Icon set placeholders created"
  # Configure Xcode project
