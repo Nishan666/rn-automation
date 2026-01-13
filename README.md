@@ -76,6 +76,11 @@ After setup, use these commands in your project directory:
 - `npm run lint:fix` - Auto-fix linting issues
 - `npm run format` - Format code with Prettier
 
+### Testing
+- `npm test` - Run tests
+- `npm run test:watch` - Run tests in watch mode
+- `npm run test:coverage` - Run tests with coverage report
+
 ## Environment Configuration
 
 Update the `.env.*` files with your API endpoints and configuration:
@@ -93,6 +98,7 @@ Update the `.env.*` files with your API endpoints and configuration:
 - **SVG Support**: react-native-svg
 - **Environment Config**: react-native-config
 - **Utilities**: react-native-toast-message, @react-native-async-storage/async-storage, react-native-device-info
+- **Testing**: jest, @testing-library/react-native, @testing-library/jest-native
 - **Development**: ESLint, Prettier, TypeScript, Babel module resolver, @types/react
 
 ## Requirements
