@@ -8,3 +8,13 @@ declare module '*.svg' {
   export default content;
 }
 declare module '*.json';
+
+declare module 'react-native-config' {
+  export interface NativeConfig {
+    ENV_NAME?: string;
+    API_URL?: string;
+  }
+
+  export const Config: NativeConfig;
+  export default Config;
+}

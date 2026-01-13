@@ -314,19 +314,40 @@ print_info() {
 clear
 print_header
 
+# Function to convert project name to folder-safe name (spaces to hyphens, lowercase)
+to_folder_name() {
+  local input="$1"
+  # Replace spaces with hyphens, convert to lowercase, remove special characters except hyphens
+  echo "$input" | \
+    tr '[:upper:]' '[:lower:]' | \
+    sed 's/[^a-z0-9 -]//g' | \
+    sed 's/  */ /g' | \
+    sed 's/^[[:space:]]*//' | \
+    sed 's/[[:space:]]*$//' | \
+    tr ' ' '-' | \
+    sed 's/-\+/-/g' | \
+    sed 's/^-\+//' | \
+    sed 's/-\+$//'
+}
+
 while true; do
-  echo -e "${BOLD}What is your project name? (folder/package name - alphanumeric only)${NC}"
-  echo -e "${PURPLE}Used for: folder name, package identifier (com.projectname)${NC}"
-  echo -e "${YELLOW}Example: MyApp or myapp${NC}"
+  echo -e "${BOLD}What is your project name? (can contain spaces)${NC}"
+  echo -e "${PURPLE}Used for: folder name (spaces will be converted to hyphens), package identifier${NC}"
+  echo -e "${YELLOW}Example: My React Native Application${NC}"
+  echo -e "${YELLOW}Will create folder: my-react-native-application${NC}"
   read -p "📝 " PROJECT_NAME
   if [ -z "$PROJECT_NAME" ]; then
     print_error "Project name cannot be empty"
   elif [ ${#PROJECT_NAME} -lt 2 ]; then
     print_error "Project name must be at least 2 characters"
-  elif ! [[ "$PROJECT_NAME" =~ ^[a-zA-Z0-9]+$ ]]; then
-    print_error "Project name must contain only letters and numbers (no spaces, hyphens, or special characters)"
   else
-    break
+    # Convert to folder name and validate it's not empty after sanitization
+    FOLDER_NAME=$(to_folder_name "$PROJECT_NAME")
+    if [ -z "$FOLDER_NAME" ]; then
+      print_error "Project name must contain at least one letter or number"
+    else
+      break
+    fi
   fi
 done
 
@@ -442,9 +463,23 @@ slugify() {
     tr -cd 'a-z0-9.'
 }
 
+# Function to convert app name to package name (remove spaces, lowercase, alphanumeric only)
+to_package_name() {
+  local input="$1"
+  # Remove spaces, convert to lowercase, keep only alphanumeric
+  echo "$input" | \
+    tr '[:upper:]' '[:lower:]' | \
+    tr -d ' -_' | \
+    tr -cd 'a-z0-9'
+}
+
+# Convert project name to folder name (spaces to hyphens)
+FOLDER_NAME=$(to_folder_name "$PROJECT_NAME")
+
 echo ""
 echo -e "${BOLD}Android application ID (package name)${NC}"
-echo -e "${PURPLE}Auto-generated: com.$(slugify "$PROJECT_NAME")${NC}"
+echo -e "${PURPLE}Auto-generated from app name: com.$(to_package_name "$APP_NAME")${NC}"
+echo -e "${PURPLE}Example: 'Test App' → com.testapp${NC}"
 echo -e "  ${YELLOW}1)${NC} Use auto-generated"
 echo -e "  ${YELLOW}2)${NC} Enter custom package name"
 read -p "📱 Enter choice (1-2): " PACKAGE_CHOICE
@@ -471,12 +506,12 @@ if [ "$PACKAGE_CHOICE" = "2" ]; then
     fi
   done
 else
-  GENERATED_SLUG="$(slugify "$PROJECT_NAME")"
-  if [ -z "$GENERATED_SLUG" ]; then
-    echo "Unable to derive Android application id from project name. Please provide it explicitly."
+  GENERATED_PACKAGE="$(to_package_name "$APP_NAME")"
+  if [ -z "$GENERATED_PACKAGE" ]; then
+    echo "Unable to derive Android application id from app name. Please provide it explicitly."
     exit 1
   fi
-  ANDROID_APP_ID="com.${GENERATED_SLUG}"
+  ANDROID_APP_ID="com.${GENERATED_PACKAGE}"
   print_success "Using auto-generated: $ANDROID_APP_ID"
 fi
 
@@ -490,6 +525,7 @@ echo -e "${CYAN}${BOLD}===================================${NC}"
 echo -e "${CYAN}${BOLD}📋 Configuration Summary${NC}"
 echo -e "${CYAN}${BOLD}===================================${NC}"
 echo -e "${BOLD}Project Name:${NC} $PROJECT_NAME"
+echo -e "${BOLD}Folder Name:${NC} $FOLDER_NAME"
 echo -e "${BOLD}App Name:${NC} $DISPLAY_NAME"
 echo -e "${BOLD}Android ID:${NC} $ANDROID_APP_ID"
 echo -e "  ${YELLOW}• Develop:${NC} $DEVELOP_APP_ID"
@@ -531,11 +567,28 @@ if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
 fi
 
 echo ""
-print_step "Creating Expo project '$PROJECT_NAME'..."
+print_step "Creating Expo project '$PROJECT_NAME' (folder: $FOLDER_NAME)..."
 cd "$PROJECT_DIR"
-if npx create-expo-app@latest "$PROJECT_NAME" --template bare-minimum; then
+if npx create-expo-app@latest "$FOLDER_NAME" --template bare-minimum; then
   print_success "Expo project created"
-  cd "$PROJECT_NAME"
+  cd "$FOLDER_NAME"
+  
+  # Verify npm install completed successfully (create-expo-app runs npm install internally)
+  if [ ! -d "node_modules" ] || [ ! -d "node_modules/expo" ]; then
+    print_warning "npm install may have failed during project creation (common with 503 errors)."
+    print_info "Attempting to install dependencies now..."
+    if npm install 2>&1 | tee /tmp/npm_install_retry.log; then
+      print_success "Dependencies installed successfully"
+    else
+      print_error "npm install failed. This is often due to network issues (503 Service Unavailable)."
+      print_warning "The project was created but dependencies are not installed."
+      print_info "Please run manually:"
+      print_info "  1. cd $PROJECT_DIR/$FOLDER_NAME"
+      print_info "  2. npm install"
+      print_info "  3. Then continue with the setup or run the setup script again"
+      print_warning "Continuing with setup, but some steps may fail..."
+    fi
+  fi
 else
   print_error "Failed to create Expo project"
   exit 1
@@ -588,21 +641,25 @@ cat > .env << 'EOF'
 # Default environment variables
 # Example:
 # API_URL=https://api.example.com
+ENV_NAME=Production
 EOF
 
 cat > .env.develop << 'EOF'
 # Develop environment variables
 # API_URL=https://develop-api.example.com
+ENV_NAME=Develop
 EOF
 
 cat > .env.qa << 'EOF'
 # QA environment variables
 # API_URL=https://qa-api.example.com
+ENV_NAME=QA
 EOF
 
 cat > .env.preprod << 'EOF'
 # Preproduction environment variables
 # API_URL=https://preprod-api.example.com
+ENV_NAME=Preprod
 EOF
 
 echo "Configuring Android..."
@@ -654,9 +711,16 @@ fi
 
 # Add resValue
 if ! grep -q "build_config_package" "$GRADLE_FILE"; then
-  sed -i.bak "/applicationId[[:space:]]*\"$ANDROID_APP_ID\"/a\\
-        resValue \"string\", \"build_config_package\", \"$ANDROID_APP_ID\"" "$GRADLE_FILE"
-  rm -f "${GRADLE_FILE}.bak"
+  # Use awk to insert resValue line with proper newline after applicationId
+  awk -v app_id="$ANDROID_APP_ID" '
+    /applicationId[[:space:]]*"/ {
+      print
+      print "        resValue \"string\", \"build_config_package\", \"" app_id "\""
+      next
+    }
+    { print }
+  ' "$GRADLE_FILE" > "${GRADLE_FILE}.tmp"
+  mv "${GRADLE_FILE}.tmp" "$GRADLE_FILE"
 fi
 
 # Update strings.xml
@@ -684,8 +748,8 @@ create_flavor_strings preprod "${DISPLAY_NAME} Preprod"
 
 # Fix package structure to match applicationId
 print_info "Fixing package structure..."
-# Expo creates package path with lowercase project name
-EXPO_PACKAGE_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
+# Expo creates package path with lowercase folder name
+EXPO_PACKAGE_NAME=$(echo "$FOLDER_NAME" | tr '[:upper:]' '[:lower:]')
 OLD_PACKAGE_PATH="android/app/src/main/java/com/${EXPO_PACKAGE_NAME}"
 NEW_PACKAGE_PATH="android/app/src/main/java/$(echo $ANDROID_APP_ID | tr '.' '/')"
 
@@ -700,6 +764,20 @@ if [ -d "$OLD_PACKAGE_PATH" ] && [ "$OLD_PACKAGE_PATH" != "$NEW_PACKAGE_PATH" ];
   # Clean up empty directories
   find android/app/src/main/java/com -type d -empty -delete 2>/dev/null || true
 fi
+
+# Ensure all Kotlin files have the correct package name matching applicationId/namespace
+# This fixes cases where package name doesn't match namespace (causes BuildConfig/R unresolved errors)
+print_info "Ensuring Kotlin package names match namespace..."
+find android/app/src/main/java -name "*.kt" -type f | while read kt_file; do
+  # Extract current package name from file
+  current_package=$(grep -m 1 "^package " "$kt_file" | sed 's/^package //' | sed 's/;$//')
+  if [ -n "$current_package" ] && [ "$current_package" != "$ANDROID_APP_ID" ]; then
+    # Update package declaration to match applicationId
+    sed -i.bak "s|^package .*|package ${ANDROID_APP_ID}|" "$kt_file"
+    rm -f "${kt_file}.bak" 2>/dev/null || true
+    print_info "Updated package in $(basename "$kt_file"): $current_package → $ANDROID_APP_ID"
+  fi
+done
 
 # Disable new architecture
 GRADLE_PROPS="android/gradle.properties"
@@ -759,9 +837,22 @@ if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
   else
     print_step "Configuring iOS..."
     
-    # Get iOS project name from Podfile
-    IOS_PROJECT_NAME=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "$PROJECT_NAME")
-  
+    # Detect iOS project name by finding the actual .xcodeproj directory
+    IOS_PROJECT_DETECTED=$(find ios -maxdepth 1 -name "*.xcodeproj" -type d 2>/dev/null | head -1)
+    if [ -n "$IOS_PROJECT_DETECTED" ]; then
+      IOS_PROJECT_NAME=$(basename "$IOS_PROJECT_DETECTED" .xcodeproj)
+      print_info "Detected iOS project: $IOS_PROJECT_NAME"
+    else
+      # Fallback: try to get from Podfile
+      IOS_PROJECT_NAME=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "")
+      if [ -z "$IOS_PROJECT_NAME" ]; then
+        # Last resort: use folder name
+        IOS_PROJECT_NAME="$FOLDER_NAME"
+        print_warning "Could not detect iOS project name, using folder name: $IOS_PROJECT_NAME"
+      else
+        print_info "Found iOS project name from Podfile: $IOS_PROJECT_NAME"
+      fi
+    fi
   
   # Source iOS flavor setup script
   source "$SCRIPT_DIR/ios_flavor_setup.sh"
@@ -808,37 +899,40 @@ exit 0 unless target
 # Update icon configuration and display name for each build configuration
 target.build_configurations.each do |config|
   case config.name
-  when /Debug Develop|Release Develop/
+  when /Debug_Production|Release_Production/
+    # Production configurations use base AppIcon and production display name
+    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
+    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = display_name
+  when /Debug_Develop|Release_Develop/
     config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconDev'
     config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} Develop"
-  when /Debug QA|Release QA/
+  when /Debug_QA|Release_QA/
     config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconQA'
     config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} QA"
-  when /Debug Preprod|Release Preprod/
+  when /Debug_Preprod|Release_Preprod/
     config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconPreprod'
     config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} Preprod"
-  when /Debug|Release/
-    # Production configurations keep AppIcon (default) and base display name
-    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon' unless config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME']
-    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = display_name unless config.build_settings['INFOPLIST_KEY_CFBundleDisplayName']
+  # Base Debug/Release configurations are left as-is (minimal/default)
   end
 end
 
 # Also update project-level configurations
 project.build_configurations.each do |config|
   case config.name
-  when /Debug Develop|Release Develop/
+  when /Debug_Production|Release_Production/
+    # Production configurations use base AppIcon and production display name
+    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
+    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = display_name
+  when /Debug_Develop|Release_Develop/
     config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconDev'
     config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} Develop"
-  when /Debug QA|Release QA/
+  when /Debug_QA|Release_QA/
     config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconQA'
     config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} QA"
-  when /Debug Preprod|Release Preprod/
+  when /Debug_Preprod|Release_Preprod/
     config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIconPreprod'
     config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = "#{display_name} Preprod"
-  when /Debug|Release/
-    config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon' unless config.build_settings['ASSETCATALOG_COMPILER_APPICON_NAME']
-    config.build_settings['INFOPLIST_KEY_CFBundleDisplayName'] = display_name unless config.build_settings['INFOPLIST_KEY_CFBundleDisplayName']
+  # Base Debug/Release configurations are left as-is (minimal/default)
   end
 end
 
@@ -854,32 +948,106 @@ RUBYEOF
     print_warning "Ruby not found. Skipping automatic icon configuration. You'll need to set ASSETCATALOG_COMPILER_APPICON_NAME manually in Xcode."
   fi
   
-  # Install Expo modules
-  print_info "Installing Expo modules..."
-  if npx install-expo-modules@latest --non-interactive 2>/dev/null; then
-    print_success "Expo modules installed"
-    
-    # Pod install
-    print_info "Installing CocoaPods dependencies..."
-    if npx pod-install --non-interactive 2>/dev/null; then
-      print_success "iOS configured"
+  # Check if npm dependencies are installed (especially expo)
+  print_info "Verifying npm dependencies are installed..."
+  if [ ! -d "node_modules/expo" ]; then
+    print_warning "Expo is not installed. npm install may have failed."
+    print_info "Attempting to install dependencies..."
+    if npm install 2>&1 | tee /tmp/npm_install.log; then
+      print_success "Dependencies installed"
     else
-      print_warning "Pod install failed. Trying manual approach..."
-      if cd ios && pod install --repo-update 2>/dev/null && cd ..; then
-        print_success "iOS configured with manual pod install"
-      else
-        print_warning "iOS setup incomplete. Manual steps required:"
-        print_info "  1. cd $PROJECT_DIR/$PROJECT_NAME"
-        print_info "  2. npx install-expo-modules@latest"
-        print_info "  3. cd ios && pod install"
-      fi
+      print_error "npm install failed. This is often due to network issues (503 Service Unavailable)."
+      print_info "Please try again later or run manually:"
+      print_info "  1. cd $PROJECT_DIR/$FOLDER_NAME"
+      print_info "  2. npm install"
+      print_info "  3. npx install-expo-modules@latest"
+      print_info "  4. cd ios && pod install"
+      print_warning "Skipping iOS setup until dependencies are installed."
+      SETUP_IOS="n"
     fi
-  else
-    print_warning "Expo modules installation failed."
-    print_info "iOS setup skipped. To set up iOS manually:"
-    print_info "  1. cd $PROJECT_DIR/$PROJECT_NAME"
-    print_info "  3. cd ios && pod install"
-    print_info "  2. npx install-expo-modules@latest"
+  fi
+  
+    # Only proceed with iOS setup if expo is installed
+    if [ ! -d "node_modules/expo" ]; then
+      print_warning "Expo not found. Skipping iOS setup."
+      print_info "After installing dependencies, run:"
+      print_info "  1. npx install-expo-modules@latest"
+      print_info "  2. cd ios && pod install"
+    else
+      # Verify Podfile can be loaded (expo must be installed)
+      PODFILE="ios/Podfile"
+      if [ -f "$PODFILE" ]; then
+        # Remove problematic RCT_USE_PREBUILT_RNCORE line from Podfile (fixes Expo AppDelegate issue)
+        if grep -q "RCT_USE_PREBUILT_RNCORE" "$PODFILE"; then
+          print_info "Removing RCT_USE_PREBUILT_RNCORE line from Podfile (fixes Expo AppDelegate issue)..."
+          # Use a pattern that matches the entire line containing RCT_USE_PREBUILT_RNCORE
+          sed -i.bak "/RCT_USE_PREBUILT_RNCORE/d" "$PODFILE" 2>/dev/null || true
+          rm -f "${PODFILE}.bak" 2>/dev/null || true
+          print_success "Removed problematic line from Podfile"
+        fi
+        
+        # Test if Podfile can load expo autolinking script
+        if ! node --print "require.resolve('expo/package.json')" >/dev/null 2>&1; then
+          print_error "Cannot load expo module. npm install may have failed."
+          print_info "Please ensure npm install completed successfully before running iOS setup."
+          print_info "Try running: npm install"
+          print_warning "Skipping iOS setup until dependencies are installed."
+        else
+          # Install Expo modules
+          print_info "Installing Expo modules..."
+          if npx install-expo-modules@latest --non-interactive 2>/dev/null; then
+            print_success "Expo modules installed"
+            
+            # Remove problematic RCT_USE_PREBUILT_RNCORE line from Podfile (fixes Expo AppDelegate issue)
+            if [ -f "$PODFILE" ] && grep -q "RCT_USE_PREBUILT_RNCORE" "$PODFILE"; then
+              print_info "Removing RCT_USE_PREBUILT_RNCORE line from Podfile..."
+              # Remove the line that causes Expo AppDelegate issues
+              sed -i.bak "/RCT_USE_PREBUILT_RNCORE/d" "$PODFILE" 2>/dev/null || true
+              rm -f "${PODFILE}.bak" 2>/dev/null || true
+              print_success "Removed problematic line from Podfile"
+            fi
+            
+            # Pod install
+            print_info "Installing CocoaPods dependencies..."
+            if npx pod-install --non-interactive 2>/dev/null; then
+              print_success "iOS configured"
+            else
+              print_warning "Pod install failed. Trying manual approach..."
+              if cd ios && pod install --repo-update 2>/dev/null && cd ..; then
+                print_success "iOS configured with manual pod install"
+              else
+                print_warning "iOS setup incomplete. Manual steps required:"
+                print_info "  1. cd $PROJECT_DIR/$FOLDER_NAME"
+                print_info "  2. npx install-expo-modules@latest"
+                print_info "  3. cd ios && pod install"
+              fi
+            fi
+            
+            # Verify codegen files were generated (they should be generated during pod install)
+            print_info "Verifying codegen files..."
+            GENERATED_DIR="ios/build/generated/ios"
+            if [ -d "$GENERATED_DIR" ]; then
+              CODEGEN_COUNT=$(find "$GENERATED_DIR" -name "*-generated.mm" -o -name "*-generated.cpp" 2>/dev/null | wc -l | tr -d ' ')
+              if [ "$CODEGEN_COUNT" -gt 0 ]; then
+                print_success "Codegen files generated ($CODEGEN_COUNT files found)"
+              else
+                print_warning "Codegen files may not be generated yet (will be created during first build)"
+              fi
+            else
+              print_warning "Codegen directory not found yet (will be created during first build)"
+            fi
+          else
+            print_warning "Expo modules installation failed."
+            print_info "iOS setup skipped. To set up iOS manually:"
+            print_info "  1. cd $PROJECT_DIR/$FOLDER_NAME"
+            print_info "  2. npx install-expo-modules@latest"
+            print_info "  3. cd ios && pod install"
+          fi
+        fi
+      else
+        print_warning "Podfile not found. iOS project may not be initialized."
+        print_info "Try running: npx install-expo-modules@latest"
+      fi
     fi
   fi
 else
@@ -889,27 +1057,49 @@ fi
 # Add iOS scripts to package.json if iOS was configured
 if [ "$SETUP_IOS" = "y" ] || [ "$SETUP_IOS" = "Y" ]; then
   if [ "$(uname -s)" = "Darwin" ]; then
-    IOS_PROJECT_NAME_FOR_SCRIPTS=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "$PROJECT_NAME")
+    # Detect iOS project name for scripts
+    IOS_PROJECT_DETECTED_FOR_SCRIPTS=$(find ios -maxdepth 1 -name "*.xcodeproj" -type d 2>/dev/null | head -1)
+    if [ -n "$IOS_PROJECT_DETECTED_FOR_SCRIPTS" ]; then
+      IOS_PROJECT_NAME_FOR_SCRIPTS=$(basename "$IOS_PROJECT_DETECTED_FOR_SCRIPTS" .xcodeproj)
+    else
+      IOS_PROJECT_NAME_FOR_SCRIPTS=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "$FOLDER_NAME")
+    fi
     
-    # Copy clean script to project for easy access
+    # Copy clean script and fix duplicates script to project for easy access
     if [ -f "$SCRIPT_DIR/utils/clean_ios_build.sh" ]; then
       mkdir -p scripts
       cp "$SCRIPT_DIR/utils/clean_ios_build.sh" scripts/clean_ios_build.sh
       chmod +x scripts/clean_ios_build.sh
     fi
+    if [ -f "$SCRIPT_DIR/utils/fix_duplicate_script_phases.sh" ]; then
+      mkdir -p scripts
+      cp "$SCRIPT_DIR/utils/fix_duplicate_script_phases.sh" scripts/fix_ios_duplicates.sh
+      chmod +x scripts/fix_ios_duplicates.sh
+    fi
+    
+    # Copy codegen fix script
+    if [ -f "$SCRIPT_DIR/utils/fix_codegen_files.sh" ]; then
+      mkdir -p scripts
+      cp "$SCRIPT_DIR/utils/fix_codegen_files.sh" scripts/fix_codegen_files.sh
+      chmod +x scripts/fix_codegen_files.sh
+    fi
     
     TEMP_JSON2="${PACKAGE_JSON}.tmp2"
     cat "$PACKAGE_JSON" | jq \
-      --arg ios_dev "expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS} Develop' --configuration 'Debug Develop'" \
-      --arg ios_qa "expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS} QA' --configuration 'Debug QA'" \
-      --arg ios_preprod "expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS} Preprod' --configuration 'Debug Preprod'" \
-      --arg ios_prod "expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS}' --configuration 'Debug'" \
+      --arg ios_dev "APP_ENV=develop expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS}_Develop' --configuration 'Debug_Develop'" \
+      --arg ios_qa "APP_ENV=qa expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS}_QA' --configuration 'Debug_QA'" \
+      --arg ios_preprod "APP_ENV=preprod expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS}_Preprod' --configuration 'Debug_Preprod'" \
+      --arg ios_prod "APP_ENV=production expo run:ios --scheme '${IOS_PROJECT_NAME_FOR_SCRIPTS}' --configuration 'Debug_Production'" \
       --arg ios_clean "bash scripts/clean_ios_build.sh" \
+      --arg ios_fix "bash scripts/fix_ios_duplicates.sh" \
+      --arg ios_codegen "bash scripts/fix_codegen_files.sh" \
       '.scripts["ios:dev"] = $ios_dev |
        .scripts["ios:qa"] = $ios_qa |
        .scripts["ios:preprod"] = $ios_preprod |
        .scripts["ios:prod"] = $ios_prod |
-       .scripts["ios:clean"] = $ios_clean' \
+       .scripts["ios:clean"] = $ios_clean |
+       .scripts["ios:fix-duplicates"] = $ios_fix |
+       .scripts["ios:fix-codegen"] = $ios_codegen' \
       > "$TEMP_JSON2"
     
     mv "$TEMP_JSON2" "$PACKAGE_JSON"
@@ -928,6 +1118,16 @@ if [ -f "$GRADLE_FILE" ]; then
   # Also remove any duplicate entryFile/cliFile/bundleCommand after autolinkLibrariesWithApp
   awk '/autolinkLibrariesWithApp\(\)/{print; getline; while(/^[[:space:]]*(entryFile|cliFile|bundleCommand)/) getline; print; next}1' "$GRADLE_FILE" > "${GRADLE_FILE}.tmp"
   mv "${GRADLE_FILE}.tmp" "$GRADLE_FILE"
+  
+  # Fix missing newline after resValue line (causes minSdkVersion() on null object error)
+  if grep -q "build_config_package.*minSdkVersion" "$GRADLE_FILE"; then
+    print_info "Fixing missing newline after resValue line..."
+    # Add newline between resValue and minSdkVersion using sed with proper escaping
+    sed -i.bak 's/\(resValue "string", "build_config_package", "[^"]*"\)[[:space:]]*\(minSdkVersion\)/\1\
+        \2/' "$GRADLE_FILE"
+    rm -f "${GRADLE_FILE}.bak" 2>/dev/null || true
+    print_success "Fixed missing newline in build.gradle"
+  fi
 fi
 
 # Optional icon setup
@@ -980,7 +1180,7 @@ if [ "$SETUP_ICONS" = "y" ] || [ "$SETUP_ICONS" = "Y" ]; then
       IOS_PROJECT_CHECK=$(find ios -maxdepth 1 -name "*.xcodeproj" -type d 2>/dev/null | head -1 || true)
       if [ -z "$IOS_PROJECT_CHECK" ]; then
         # Fallback: try to get from Podfile
-        IOS_NAME_CHECK=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "$PROJECT_NAME")
+        IOS_NAME_CHECK=$(grep -m 1 "project '" ios/Podfile 2>/dev/null | sed "s/.*project '\([^']*\)'.*/\1/" || echo "$FOLDER_NAME")
       else
         IOS_NAME_CHECK=$(basename "$IOS_PROJECT_CHECK" .xcodeproj)
       fi
@@ -1043,7 +1243,7 @@ echo -e "${GREEN}${BOLD}===================================${NC}"
 echo ""
 echo ""
 echo -e "${BOLD}📋 Next steps:${NC}"
-echo -e "  ${CYAN}1.${NC} cd $PROJECT_DIR/$PROJECT_NAME"
+echo -e "  ${CYAN}1.${NC} cd $PROJECT_DIR/$FOLDER_NAME"
 echo -e "  ${CYAN}2.${NC} Update .env files with your API endpoints"
 echo -e "  ${CYAN}3.${NC} Review android/app/build.gradle for any additional tweaks"
 if [ "$SETUP_ICONS" = "y" ] || [ "$SETUP_ICONS" = "Y" ]; then

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, TextInput, Button, StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Config from 'react-native-config';
 import { useLoginStore } from './loginStore';
 
 export const LoginScreen: React.FC = () => {
@@ -8,6 +9,7 @@ export const LoginScreen: React.FC = () => {
   const { login, isLoading, error, clearError } = useLoginStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const envName = Config.ENV_NAME || 'Production';
 
   const onSubmit = async () => {
     try {
@@ -24,6 +26,7 @@ export const LoginScreen: React.FC = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Welcome Back</Text>
+      <Text style={styles.envBadge}>{envName}</Text>
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -60,8 +63,16 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '600',
-    marginBottom: 16,
+    marginBottom: 8,
     textAlign: 'center',
+  },
+  envBadge: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 24,
+    textTransform: 'uppercase',
   },
   input: {
     borderWidth: 1,

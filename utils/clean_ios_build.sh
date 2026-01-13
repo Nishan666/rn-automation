@@ -52,7 +52,7 @@ if command -v xcodebuild >/dev/null 2>&1; then
   print_info "Cleaning with xcodebuild..."
   
   # Clean all build configurations
-  for config in "Debug" "Release" "Debug Develop" "Release Develop" "Debug QA" "Release QA" "Debug Preprod" "Release Preprod"; do
+  for config in "Debug" "Release" "Debug_Production" "Release_Production" "Debug_Develop" "Release_Develop" "Debug_QA" "Release_QA" "Debug_Preprod" "Release_Preprod"; do
     if xcodebuild -project "$IOS_PROJECT" -scheme "$IOS_PROJECT_NAME" -configuration "$config" clean >/dev/null 2>&1; then
       print_success "Cleaned $config configuration"
     fi
