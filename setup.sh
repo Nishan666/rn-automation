@@ -339,6 +339,7 @@ echo -e "        • Environment config"
 
 echo -e "        • Utilities (Toast, AsyncStorage, DeviceInfo)"
 echo -e "        • Development tools (ESLint, Prettier, TypeScript)"
+echo -e "        • Testing (Jest, React Native Testing Library)"
 echo -e "${CYAN}Step 4:${NC} Copy template files (configs, example modules)"
 echo -e "${CYAN}Step 5:${NC} Create environment files (.env.develop, .env.qa, etc.)"
 echo -e "${CYAN}Step 6:${NC} Configure Android product flavors"
@@ -351,6 +352,7 @@ echo -e "        • Splash screen with session check"
 echo -e "        • Login flow with Zustand store"
 echo -e "        • Home screen"
 echo -e "        • Navigation setup"
+echo -e "        • Component testing setup with example tests"
 echo ""
 echo -e "${BOLD}Proceed with setup?${NC}"
 read -p "✅ (y/n): " CONFIRM
@@ -397,6 +399,9 @@ npm install react-native-toast-message @react-native-async-storage/async-storage
 # Development tools
 npm install --save-dev --legacy-peer-deps eslint @eslint/js typescript-eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser eslint-config-prettier eslint-plugin-react prettier babel-preset-expo babel-plugin-module-resolver
 
+# Testing dependencies
+npm install --save-dev jest @testing-library/react-native@^12.4.0 @testing-library/jest-native react-test-renderer@19.1.0
+
 # TypeScript types
 npx expo install @types/react
 
@@ -410,6 +415,8 @@ cp "$TEMPLATES_DIR/.eslintignore" .
 cp "$TEMPLATES_DIR/.prettierrc" .
 cp "$TEMPLATES_DIR/.prettierignore" .
 cp "$TEMPLATES_DIR/custom.d.ts" .
+cp "$TEMPLATES_DIR/jest.config.js" .
+cp "$TEMPLATES_DIR/jest.setup.js" .
 cp "$TEMPLATES_DIR/App.tsx" .
 cp -r "$TEMPLATES_DIR/src/"* src/
 
@@ -566,7 +573,10 @@ cat "$PACKAGE_JSON" | jq \
    .scripts["lint"] = "eslint . --ext .ts,.tsx,.js,.jsx" |
    .scripts["lint:fix"] = "eslint . --ext .ts,.tsx,.js,.jsx --fix" |
    .scripts["format"] = "prettier --write \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"" |
-   .scripts["format:check"] = "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\""' \
+   .scripts["format:check"] = "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"" |
+   .scripts["test"] = "jest" |
+   .scripts["test:watch"] = "jest --watch" |
+   .scripts["test:coverage"] = "jest --coverage"' \
   > "$TEMP_JSON"
 
 mv "$TEMP_JSON" "$PACKAGE_JSON"
@@ -838,5 +848,10 @@ echo -e "${YELLOW}Code Quality:${NC}"
 echo -e "  ${GREEN}npm run lint${NC}                 # Check code quality"
 echo -e "  ${GREEN}npm run lint:fix${NC}             # Auto-fix linting issues"
 echo -e "  ${GREEN}npm run format${NC}               # Format code"
+echo ""
+echo -e "${YELLOW}Testing:${NC}"
+echo -e "  ${GREEN}npm test${NC}                     # Run tests"
+echo -e "  ${GREEN}npm run test:watch${NC}           # Run tests in watch mode"
+echo -e "  ${GREEN}npm run test:coverage${NC}        # Run tests with coverage"
 echo ""
 echo "==================================="
