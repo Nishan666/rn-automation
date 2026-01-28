@@ -8,6 +8,36 @@ TEMPLATES_DIR="$SCRIPT_DIR/templates"
 # Source file browser utility
 source "$SCRIPT_DIR/utils/file_browser.sh"
 
+# Icon info preview function
+show_icon_preview() {
+  local icon_path="$1"
+  local width height filesize
+  
+  # Get file info
+  local filename=$(basename "$icon_path")
+  if command -v sips >/dev/null 2>&1; then
+    width=$(sips -g pixelWidth "$icon_path" 2>/dev/null | grep pixelWidth | awk '{print $2}')
+    height=$(sips -g pixelHeight "$icon_path" 2>/dev/null | grep pixelHeight | awk '{print $2}')
+  fi
+  
+  # Get file size
+  if [ "$(uname -s)" = "Darwin" ]; then
+    filesize=$(ls -lh "$icon_path" | awk '{print $5}')
+  else
+    filesize=$(du -h "$icon_path" | cut -f1)
+  fi
+  
+  # Show file info
+  echo ""
+  echo -e "  ${BOLD}File Name:${NC} ${filename}"
+  echo -e "  ${BOLD}File Path:${NC} ${icon_path}"
+  echo -e "  ${BOLD}File Size:${NC} ${filesize}"
+  if [ -n "$width" ] && [ -n "$height" ]; then
+    echo -e "  ${BOLD}Dimensions:${NC} ${width}x${height}"
+  fi
+  echo ""
+}
+
 # Icon setup functions
 setup_icons() {
   local environment="$1"
@@ -597,7 +627,7 @@ else
 fi
 
 print_step "Creating project structure..."
-mkdir -p src/assets/fonts src/constants src/model src/navigation src/modules/splash src/modules/login src/modules/home src/services src/store/slices src/styles src/utils src/viewmodels
+mkdir -p src/assets/fonts src/constants src/model src/navigation src/modules/splash src/modules/login src/modules/home src/services src/store/slices src/styles src/utils
 print_success "Project structure created"
 
 print_step "Installing dependencies..."
@@ -1161,22 +1191,40 @@ if [ "$SETUP_ICONS" = "y" ] || [ "$SETUP_ICONS" = "Y" ]; then
   echo ""
   
   for env in "develop" "qa" "preprod" "production"; do
-    echo -e "${BOLD}Select icon for ${env} environment:${NC}"
-    ICON_PATH=$(browse_files "$HOME" "png|PNG" "file")
-    
-    if [ $? -eq 0 ] && [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
-      print_step "Setting up $env icons..."
-      echo ""
-      if setup_icons "$env" "$ICON_PATH"; then
-        print_success "Icons set up for $env environment"
+    while true; do
+      echo -e "${BOLD}Select icon for ${env} environment:${NC}"
+      ICON_PATH=$(browse_files "$HOME" "png|PNG" "file")
+      
+      if [ $? -eq 0 ] && [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
+        echo ""
+        echo -e "${CYAN}Preview of selected icon:${NC}"
+        echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        show_icon_preview "$ICON_PATH"
+        echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+        echo ""
+        echo -e "${BOLD}Use this icon for ${env} environment?${NC}"
+        read -p "✅ (y/n): " CONFIRM_ICON
+        
+        if [ "$CONFIRM_ICON" = "y" ] || [ "$CONFIRM_ICON" = "Y" ]; then
+          print_step "Setting up $env icons..."
+          echo ""
+          if setup_icons "$env" "$ICON_PATH"; then
+            print_success "Icons set up for $env environment"
+          else
+            print_warning "Icon setup failed for $env"
+            print_info "   Please check the error messages above"
+          fi
+          break
+        else
+          print_warning "Icon rejected. Please select a different icon."
+          echo ""
+        fi
       else
-        print_warning "Icon setup failed for $env"
-        print_info "   Please check the error messages above"
+        print_warning "No icon selected for $env environment. Skipping."
+        print_info "   You can set up icons later using: ./setup_ios_icons.sh"
+        break
       fi
-    else
-      print_warning "No icon selected for $env environment. Skipping."
-      print_info "   You can set up icons later using: ./setup_ios_icons.sh"
-    fi
+    done
     echo ""
   done
   
