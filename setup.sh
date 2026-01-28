@@ -360,6 +360,9 @@ if [ "$WORKFLOW_CHOICE" = "2" ]; then
     exit 1
   fi
   
+  # Save the original directory where user ran the script
+  ORIGINAL_DIR="$PWD"
+  
   # Use /tmp for temporary setup
   TEMP_MANAGED="/tmp/expo-managed-workflow-$$"
   mkdir -p "$TEMP_MANAGED"
@@ -375,7 +378,12 @@ if [ "$WORKFLOW_CHOICE" = "2" ]; then
   print_success "Dependencies installed!"
   echo ""
   print_step "Running project generator..."
-  node node_modules/plop/bin/plop.js
+  
+  # Change back to original directory so file browser starts from there
+  cd "$ORIGINAL_DIR"
+  
+  # Run plop from the temp directory
+  node "$TEMP_MANAGED/node_modules/plop/bin/plop.js" --plopfile "$TEMP_MANAGED/plopfile.js"
   
   # Clean up the temp folder
   rm -rf "$TEMP_MANAGED"
