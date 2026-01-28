@@ -360,47 +360,13 @@ if [ "$WORKFLOW_CHOICE" = "2" ]; then
     exit 1
   fi
   
-  # Get project directory
-  echo ""
-  echo -e "${BOLD}Where do you want to create the project?${NC}"
-  echo -e "  ${YELLOW}1)${NC} Current directory (${PWD})"
-  echo -e "  ${YELLOW}2)${NC} Choose different location"
-  read -p "📍 Enter choice (1-2): " LOCATION_CHOICE
-  
-  PROJECT_DIR="$PWD"
-  if [ "$LOCATION_CHOICE" = "2" ]; then
-    echo ""
-    echo -e "${BOLD}Choose directory selection method:${NC}"
-    echo -e "  ${YELLOW}1)${NC} Manual input (type path)"
-    echo -e "  ${YELLOW}2)${NC} Use fuzzy finder (fzf)"
-    read -p "📁 Enter choice (1-2): " DIR_METHOD
-    
-    if [ "$DIR_METHOD" = "2" ]; then
-      MANUAL_DIR=$(browse_files "$HOME" "" "directory")
-      if [ $? -ne 0 ] || [ -z "$MANUAL_DIR" ]; then
-        print_warning "Directory selection cancelled"
-        MANUAL_DIR=""
-      fi
-    else
-      read -p "📁 Enter directory path: " MANUAL_DIR
-    fi
-    
-    if [ -n "$MANUAL_DIR" ]; then
-      MANUAL_DIR="${MANUAL_DIR/#\~/$HOME}"
-      if [ -d "$MANUAL_DIR" ]; then
-        PROJECT_DIR="$MANUAL_DIR"
-      else
-        mkdir -p "$MANUAL_DIR" 2>/dev/null && PROJECT_DIR="$MANUAL_DIR" || PROJECT_DIR="$PWD"
-      fi
-    fi
-  fi
-  
-  # Copy managed workflow to project directory (exclude node_modules)
-  TEMP_MANAGED="$PROJECT_DIR/expo-managed-workflow"
+  # Use /tmp for temporary setup
+  TEMP_MANAGED="/tmp/expo-managed-workflow-$$"
   mkdir -p "$TEMP_MANAGED"
   
   # Copy files excluding node_modules
-  rsync -av --exclude='node_modules' --exclude='package-lock.json' "$MANAGED_DIR/" "$TEMP_MANAGED/"
+  rsync -av --exclude='node_modules' --exclude='package-lock.json' "$MANAGED_DIR/" "$TEMP_MANAGED/" > /dev/null
+  
   cd "$TEMP_MANAGED"
   
   print_step "Installing dependencies..."
@@ -410,6 +376,9 @@ if [ "$WORKFLOW_CHOICE" = "2" ]; then
   echo ""
   print_step "Running project generator..."
   node node_modules/plop/bin/plop.js
+  
+  # Clean up the temp folder
+  rm -rf "$TEMP_MANAGED"
   
   print_success "Setup complete!"
   echo ""
