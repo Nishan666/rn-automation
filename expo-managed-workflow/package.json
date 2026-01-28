@@ -1,0 +1,22 @@
+{
+  "name": "expo-project-generator",
+  "version": "1.0.0",
+  "description": "Plop.js generator for creating Expo apps with React Navigation and TypeScript",
+  "main": "plopfile.js",
+  "scripts": {
+    "generate": "plop"
+  },
+  "keywords": [
+    "expo",
+    "react-native",
+    "plop",
+    "generator"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "plop": "^4.0.1",
+    "rxjs": "^7.8.2",
+    "sharp": "^0.34.5"
+  }
+}
