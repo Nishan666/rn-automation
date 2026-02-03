@@ -676,7 +676,7 @@ else
 fi
 
 print_step "Creating project structure..."
-mkdir -p src/assets/fonts src/constants src/model src/navigation src/modules/splash src/modules/login src/modules/home src/services src/store/slices src/styles src/utils
+mkdir -p src/assets/fonts src/constants src/model src/navigation src/modules/splash src/modules/login src/modules/home src/services src/store/slices src/styles src/utils test/step-definitions test/unit-testing
 print_success "Project structure created"
 
 print_step "Installing dependencies..."
@@ -721,6 +721,7 @@ cp "$TEMPLATES_DIR/jest.config.js" .
 cp "$TEMPLATES_DIR/jest.setup.js" .
 cp "$TEMPLATES_DIR/App.tsx" .
 cp -r "$TEMPLATES_DIR/src/"* src/
+cp -r "$TEMPLATES_DIR/test/"* test/
 
 echo "Creating environment files..."
 cat > .env << 'EOF'
@@ -903,13 +904,146 @@ cat "$PACKAGE_JSON" | jq \
    .scripts["format:check"] = "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"" |
    .scripts["test"] = "jest" |
    .scripts["test:watch"] = "jest --watch" |
-   .scripts["test:coverage"] = "jest --coverage"' \
+   .scripts["test:coverage"] = "jest --coverage" |
+   .scripts["wdio"] = "wdio run wdio.conf.js" |
+   .scripts["test:android"] = "wdio run wdio.conf.js"' \
   > "$TEMP_JSON"
 
 mv "$TEMP_JSON" "$PACKAGE_JSON"
 
 # Remove default App.js if it exists
 [ -f "App.js" ] && rm -f App.js
+
+# WebdriverIO Setup (Last Step)
+echo ""
+echo -e "${BOLD}Set up WebdriverIO for mobile automation testing?${NC}"
+echo -e "${PURPLE}This will configure Appium and WebdriverIO for E2E testing${NC}"
+read -p "🤖 (y/n): " SETUP_WDIO
+
+if [ "$SETUP_WDIO" = "y" ] || [ "$SETUP_WDIO" = "Y" ]; then
+  print_step "Setting up WebdriverIO..."
+  echo ""
+  print_info "Running WebdriverIO configuration with predefined settings..."
+  echo ""
+  
+  # Run wdio config with predefined answers using expect
+  if command -v expect >/dev/null 2>&1; then
+    expect << 'EOF' || true
+set timeout 300
+log_user 1
+
+spawn npx wdio config
+
+expect {
+    "Ok to proceed?" { 
+        send "y\r"
+        exp_continue
+    }
+    -re "correct.*\\(Y/n\\)" { 
+        send "\r"
+        exp_continue
+    }
+    -re "What type of testing.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Where is your automation backend.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Which environment.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Which mobile environment.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Which framework.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to use Typescript.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want WebdriverIO to autogenerate.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "What should be the location of your feature files.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "What should be the location of your step definitions.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to use page objects.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Where are your page objects located.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Which reporter.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to add a plugin.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Would you like to include Visual Testing.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to add a service.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want me to run.*npm install.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Continue with Appium setup.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Select an option.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Choose your version.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Select an option.*" { 
+        send "Exit\r"
+        exp_continue
+    }
+    eof
+}
+EOF
+    
+    # Check if wdio.conf.js was created (indicates success)
+    if [ -f "wdio.conf.js" ]; then
+      print_success "WebdriverIO setup complete!"
+      echo ""
+      print_info "Configuration files created:"
+      echo -e "  ${GREEN}✓${NC} wdio.conf.js"
+      [ -d "test" ] && echo -e "  ${GREEN}✓${NC} test/ directory"
+    else
+      print_warning "WebdriverIO setup may have encountered issues."
+    fi
+  else
+    print_warning "'expect' command not found. Running interactive mode..."
+    npx wdio config
+  fi
+else
+  print_info "Skipping WebdriverIO setup."
+fi
 
 # iOS Setup
 echo ""
@@ -1402,4 +1536,12 @@ echo -e "  ${GREEN}npm test${NC}                     # Run tests"
 echo -e "  ${GREEN}npm run test:watch${NC}           # Run tests in watch mode"
 echo -e "  ${GREEN}npm run test:coverage${NC}        # Run tests with coverage"
 echo ""
+if [ "$SETUP_WDIO" = "y" ] || [ "$SETUP_WDIO" = "Y" ]; then
+  if [ -f "wdio.conf.js" ]; then
+echo -e "${YELLOW}WebdriverIO E2E Testing:${NC}"
+echo -e "  ${GREEN}npm run wdio${NC}                 # Run WebdriverIO tests"
+echo -e "  ${GREEN}npm run test:android${NC}         # Run Android E2E tests"
+echo ""
+  fi
+fi
 echo "==================================="

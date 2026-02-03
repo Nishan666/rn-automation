@@ -173,6 +173,10 @@ src/
 - `npm run test:watch` - Run tests in watch mode
 - `npm run test:coverage` - Run tests with coverage report
 
+**WebdriverIO E2E Testing:**
+- `npm run wdio` - Run WebdriverIO tests
+- `npm run test:android` - Run Android E2E tests
+
 ### Managed Workflow
 
 **Build:**
@@ -184,6 +188,49 @@ src/
 **Code Quality:**
 - `npm run lint` - Check code quality
 - `npm run lint:fix` - Auto-fix linting issues
+
+## WebdriverIO Mobile Testing
+
+The setup script includes an optional WebdriverIO configuration for mobile automation testing.
+
+### Setup
+
+During project setup, you'll be prompted to configure WebdriverIO. If you choose yes:
+- WebdriverIO CLI wizard will guide you through configuration
+- Appium will be installed for mobile automation
+- Test structure will be created automatically
+
+### Manual Setup
+
+If you skip WebdriverIO during initial setup, you can add it later:
+
+```bash
+cd your-project
+npx wdio config
+```
+
+### Running Tests
+
+1. Start Android Emulator:
+   ```bash
+   emulator -avd <your_avd_name>
+   ```
+
+2. Build your app:
+   ```bash
+   npm run android:dev
+   ```
+
+3. Run tests:
+   ```bash
+   npm run wdio
+   ```
+
+### Test Structure
+
+WebdriverIO tests are organized in:
+- `test/step-definitions/`
+- `test/unit-testing/`
 
 ## Environment Configuration
 
