@@ -699,7 +699,7 @@ npm install zustand
 npm install react-native-toast-message @react-native-async-storage/async-storage react-native-device-info
 
 # Development tools
-npm install --save-dev --legacy-peer-deps eslint @eslint/js typescript-eslint @typescript-eslint/eslint-plugin @typescript-eslint/parser eslint-config-prettier eslint-plugin-react prettier babel-preset-expo babel-plugin-module-resolver
+npm install --save-dev --legacy-peer-deps eslint@^9.0.0 typescript-eslint@^8.55.0 @typescript-eslint/eslint-plugin@^8.55.0 @typescript-eslint/parser@^8.55.0 eslint-config-prettier eslint-plugin-react prettier babel-preset-expo babel-plugin-module-resolver
 
 # Testing dependencies
 npm install --save-dev jest @testing-library/react-native@^12.4.0 @testing-library/jest-native react-test-renderer@19.1.0
