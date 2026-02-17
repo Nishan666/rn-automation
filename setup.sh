@@ -1029,6 +1029,8 @@ EOF
     
     # Check if wdio.conf.js was created (indicates success)
     if [ -f "wdio.conf.js" ]; then
+      [ -f "$SCRIPT_DIR/templates/wdio.config.js" ] && cp "$SCRIPT_DIR/templates/wdio.config.js" "wdio.conf.js"
+      [ -d "test/specs" ] && rm -rf "test/specs"
       print_success "WebdriverIO setup complete!"
       echo ""
       print_info "Configuration files created:"
