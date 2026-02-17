@@ -1031,6 +1031,8 @@ EOF
     if [ -f "wdio.conf.js" ]; then
       [ -f "$SCRIPT_DIR/templates/wdio.config.js" ] && cp "$SCRIPT_DIR/templates/wdio.config.js" "wdio.conf.js"
       [ -d "test/specs" ] && rm -rf "test/specs"
+      npm install --save-dev @wdio/cucumber-framework @wdio/appium-service >/dev/null 2>&1
+      npx appium driver install uiautomator2 >/dev/null 2>&1
       print_success "WebdriverIO setup complete!"
       echo ""
       print_info "Configuration files created:"
