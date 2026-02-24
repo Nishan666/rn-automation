@@ -382,11 +382,257 @@ if [ "$WORKFLOW_CHOICE" = "2" ]; then
   # Change back to original directory so file browser starts from there
   cd "$ORIGINAL_DIR"
   
-  # Run plop from the temp directory
-  node "$TEMP_MANAGED/node_modules/plop/bin/plop.js" --plopfile "$TEMP_MANAGED/plopfile.js"
+  # Run plop from the temp directory using script to capture output while keeping interactivity
+  PLOP_OUTPUT_FILE="/tmp/plop_output_$$.txt"
+  
+  # Use script command to capture output while maintaining TTY for interactive prompts
+  if [ "$(uname -s)" = "Darwin" ]; then
+    # macOS version of script command
+    script -q "$PLOP_OUTPUT_FILE" node "$TEMP_MANAGED/node_modules/plop/bin/plop.js" --plopfile "$TEMP_MANAGED/plopfile.js" || true
+  else
+    # Linux version of script command
+    script -q -c "node \"$TEMP_MANAGED/node_modules/plop/bin/plop.js\" --plopfile \"$TEMP_MANAGED/plopfile.js\"" "$PLOP_OUTPUT_FILE" || true
+  fi
+  
+  # Extract project path from plop output (looks for "Project Path: /path/to/project")
+  if [ -f "$PLOP_OUTPUT_FILE" ]; then
+    # Clean ANSI codes and extract path
+    MANAGED_PROJECT_PATH=$(cat "$PLOP_OUTPUT_FILE" | sed 's/\x1b\[[0-9;]*m//g' | grep -o "Project Path: [^[:space:]]*" | sed 's/Project Path: //' | head -1)
+    rm -f "$PLOP_OUTPUT_FILE"
+  fi
   
   # Clean up the temp folder
   rm -rf "$TEMP_MANAGED"
+  
+  print_success "Project generation complete!"
+  echo ""
+  
+  # WebdriverIO Setup for Managed Workflow
+  echo ""
+  echo -e "${BOLD}Set up WebdriverIO for mobile automation testing?${NC}"
+  echo -e "${PURPLE}This will configure Appium and WebdriverIO for E2E testing${NC}"
+  read -p "🤖 (y/n): " SETUP_WDIO_MANAGED
+
+  if [ "$SETUP_WDIO_MANAGED" = "y" ] || [ "$SETUP_WDIO_MANAGED" = "Y" ]; then
+    # Use the captured project path from plop output
+    if [ -n "$MANAGED_PROJECT_PATH" ] && [ -d "$MANAGED_PROJECT_PATH" ]; then
+      print_step "Setting up WebdriverIO in $MANAGED_PROJECT_PATH..."
+      cd "$MANAGED_PROJECT_PATH"
+      echo ""
+      print_info "Running WebdriverIO configuration with predefined settings..."
+      echo ""
+      
+      # Run wdio config with predefined answers using expect
+      if command -v expect >/dev/null 2>&1; then
+        expect << 'EOF' || true
+set timeout 300
+log_user 1
+
+spawn npx wdio config
+
+expect {
+    "Ok to proceed?" { 
+        send "y\r"
+        exp_continue
+    }
+    -re "correct.*\\(Y/n\\)" { 
+        send "\r"
+        exp_continue
+    }
+    -re "What type of testing.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Where is your automation backend.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Which environment.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Which mobile environment.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Which framework.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to use Typescript.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want WebdriverIO to autogenerate.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "What should be the location of your feature files.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "What should be the location of your step definitions.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to use page objects.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Where are your page objects located.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Which reporter.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to add a plugin.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Would you like to include Visual Testing.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to add a service.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want me to run.*npm install.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Continue with Appium setup.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Select an option.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Choose your version.*" { 
+        send "\r"
+        exp_continue
+    }
+    -re "Select an option.*" { 
+        send "Exit\r"
+        exp_continue
+    }
+    eof
+}
+EOF
+        
+        # Small delay to ensure files are written
+        sleep 1
+        
+        # Check if wdio.conf.js or wdio.conf.ts was created (indicates success)
+        WDIO_CONFIG_FILE=""
+        if [ -f "wdio.conf.ts" ]; then
+          WDIO_CONFIG_FILE="wdio.conf.ts"
+        elif [ -f "wdio.conf.js" ]; then
+          WDIO_CONFIG_FILE="wdio.conf.js"
+        fi
+        
+        if [ -n "$WDIO_CONFIG_FILE" ]; then
+          # Extract bundle ID from app.config.ts or package.json
+          MANAGED_BUNDLE_ID=""
+          if [ -f "app.config.ts" ]; then
+            # Try to extract bundle identifier from app.config.ts
+            MANAGED_BUNDLE_ID=$(grep -o "bundleIdentifier:.*['\"][^'\"]*['\"]" app.config.ts 2>/dev/null | head -1 | sed "s/.*['\"]\\([^'\"]*\\)['\"].*/\\1/" || true)
+            # If not found, try package field
+            if [ -z "$MANAGED_BUNDLE_ID" ]; then
+              MANAGED_BUNDLE_ID=$(grep -o "package:.*['\"][^'\"]*['\"]" app.config.ts 2>/dev/null | head -1 | sed "s/.*['\"]\\([^'\"]*\\)['\"].*/\\1/" || true)
+            fi
+          fi
+          # Fallback: try to get from package.json name
+          if [ -z "$MANAGED_BUNDLE_ID" ] && [ -f "package.json" ]; then
+            MANAGED_BUNDLE_ID=$(grep -o '"name"[[:space:]]*:[[:space:]]*"[^"]*"' package.json | head -1 | sed 's/.*"\([^"]*\)"$/\1/' | tr '-' '.' || true)
+            if [ -n "$MANAGED_BUNDLE_ID" ]; then
+              MANAGED_BUNDLE_ID="com.${MANAGED_BUNDLE_ID}"
+            fi
+          fi
+          # Default fallback
+          if [ -z "$MANAGED_BUNDLE_ID" ]; then
+            MANAGED_BUNDLE_ID="com.example.app"
+          fi
+          print_info "Using bundle ID: $MANAGED_BUNDLE_ID"
+          
+          # Replace wdio config with our template
+          if [ -f "$SCRIPT_DIR/templates/wdio.config.js" ]; then
+            if [ "$WDIO_CONFIG_FILE" = "wdio.conf.js" ]; then
+              # Copy template and replace bundle ID placeholder
+              sed "s/{{BUNDLE_ID}}/$MANAGED_BUNDLE_ID/g" "$SCRIPT_DIR/templates/wdio.config.js" > "wdio.conf.js"
+              print_info "Replaced wdio.conf.js with custom template"
+            elif [ "$WDIO_CONFIG_FILE" = "wdio.conf.ts" ]; then
+              # Convert JS config to TS format - read from template and transform
+              # Add TypeScript export, replace .js with .ts in paths, and replace bundle ID
+              {
+                echo "export const config: WebdriverIO.Config = {"
+                # Read template, skip the first line (exports.config = {), replace .js with .ts in paths, and replace bundle ID
+                tail -n +2 "$SCRIPT_DIR/templates/wdio.config.js" | sed 's/\.js\]/\.ts]/g' | sed "s/{{BUNDLE_ID}}/$MANAGED_BUNDLE_ID/g"
+              } > "wdio.conf.ts"
+              print_info "Replaced wdio.conf.ts with custom template"
+            fi
+          fi
+          
+          # Remove default test/specs if created by wdio
+          [ -d "test/specs" ] && rm -rf "test/specs" || true
+          
+          # Create test folders structure
+          mkdir -p test/step-definitions test/unit-testing || true
+          
+          # Copy test templates
+          if [ -d "$SCRIPT_DIR/templates/test" ]; then
+            cp -r "$SCRIPT_DIR/templates/test/"* test/ 2>/dev/null || true
+            print_info "Test templates copied"
+          fi
+          
+          # Install additional WebdriverIO dependencies
+          print_info "Installing WebdriverIO dependencies..."
+          npm install --save-dev @wdio/cucumber-framework @wdio/appium-service >/dev/null 2>&1 || true
+          
+          # Install Appium driver
+          print_info "Installing Appium uiautomator2 driver..."
+          npx appium driver install uiautomator2 >/dev/null 2>&1 || true
+          
+          print_success "WebdriverIO setup complete!"
+          echo ""
+          print_info "Configuration files created:"
+          echo -e "  ${GREEN}✓${NC} $WDIO_CONFIG_FILE"
+          [ -d "test" ] && echo -e "  ${GREEN}✓${NC} test/ directory" || true
+          [ -d "test/step-definitions" ] && echo -e "  ${GREEN}✓${NC} test/step-definitions/" || true
+          [ -d "test/unit-testing" ] && echo -e "  ${GREEN}✓${NC} test/unit-testing/" || true
+          
+          # Add wdio scripts to package.json if jq is available
+          if command -v jq >/dev/null 2>&1 && [ -f "package.json" ]; then
+            TEMP_JSON="${PWD}/package.json.tmp"
+            cat "package.json" | jq \
+              --arg config "$WDIO_CONFIG_FILE" \
+              '.scripts["wdio"] = ("wdio run " + $config)' \
+              > "$TEMP_JSON"
+            mv "$TEMP_JSON" "package.json"
+            print_success "Added wdio script to package.json"
+          fi
+        else
+          print_warning "WebdriverIO setup may have encountered issues."
+          print_info "Config file not found. You may need to run 'npx wdio config' manually."
+        fi
+      else
+        print_warning "'expect' command not found. Running interactive mode..."
+        npx wdio config
+      fi
+      
+      cd "$ORIGINAL_DIR"
+    else
+      print_warning "Could not detect project path from generator output."
+      print_info "Please run WebdriverIO setup manually:"
+      print_info "  cd <your-project-path>"
+      print_info "  npx wdio config"
+    fi
+  else
+    print_info "Skipping WebdriverIO setup."
+  fi
   
   print_success "Setup complete!"
   echo ""
@@ -905,8 +1151,7 @@ cat "$PACKAGE_JSON" | jq \
    .scripts["test"] = "jest" |
    .scripts["test:watch"] = "jest --watch" |
    .scripts["test:coverage"] = "jest --coverage" |
-   .scripts["wdio"] = "wdio run wdio.conf.js" |
-   .scripts["test:android"] = "wdio run wdio.conf.js"' \
+   .scripts["wdio"] = "wdio run wdio.conf.js"' \
   > "$TEMP_JSON"
 
 mv "$TEMP_JSON" "$PACKAGE_JSON"
@@ -1027,17 +1272,26 @@ expect {
 }
 EOF
     
+    # Small delay to ensure files are written
+    sleep 1
+    
     # Check if wdio.conf.js was created (indicates success)
     if [ -f "wdio.conf.js" ]; then
-      [ -f "$SCRIPT_DIR/templates/wdio.config.js" ] && cp "$SCRIPT_DIR/templates/wdio.config.js" "wdio.conf.js"
-      [ -d "test/specs" ] && rm -rf "test/specs"
-      npm install --save-dev @wdio/cucumber-framework @wdio/appium-service >/dev/null 2>&1
-      npx appium driver install uiautomator2 >/dev/null 2>&1
+      # Copy template and replace bundle ID placeholder
+      if [ -f "$SCRIPT_DIR/templates/wdio.config.js" ]; then
+        sed "s/{{BUNDLE_ID}}/$ANDROID_APP_ID/g" "$SCRIPT_DIR/templates/wdio.config.js" > "wdio.conf.js"
+        print_info "Configured wdio.conf.js with bundle ID: $ANDROID_APP_ID"
+      fi
+      [ -d "test/specs" ] && rm -rf "test/specs" || true
+      print_info "Installing WebdriverIO dependencies..."
+      npm install --save-dev @wdio/cucumber-framework @wdio/appium-service >/dev/null 2>&1 || true
+      print_info "Installing Appium uiautomator2 driver..."
+      npx appium driver install uiautomator2 >/dev/null 2>&1 || true
       print_success "WebdriverIO setup complete!"
       echo ""
       print_info "Configuration files created:"
       echo -e "  ${GREEN}✓${NC} wdio.conf.js"
-      [ -d "test" ] && echo -e "  ${GREEN}✓${NC} test/ directory"
+      [ -d "test" ] && echo -e "  ${GREEN}✓${NC} test/ directory" || true
     else
       print_warning "WebdriverIO setup may have encountered issues."
     fi
@@ -1544,7 +1798,6 @@ if [ "$SETUP_WDIO" = "y" ] || [ "$SETUP_WDIO" = "Y" ]; then
   if [ -f "wdio.conf.js" ]; then
 echo -e "${YELLOW}WebdriverIO E2E Testing:${NC}"
 echo -e "  ${GREEN}npm run wdio${NC}                 # Run WebdriverIO tests"
-echo -e "  ${GREEN}npm run test:android${NC}         # Run Android E2E tests"
 echo ""
   fi
 fi
