@@ -941,8 +941,9 @@ npm install react-native-config@latest
 # State management
 npm install zustand
 
-# Utilities
-npm install react-native-toast-message @react-native-async-storage/async-storage react-native-device-info
+# Utilities (use expo install for async-storage compatibility)
+npm install react-native-toast-message react-native-device-info
+npx expo install @react-native-async-storage/async-storage
 
 # Development tools
 npm install --save-dev --legacy-peer-deps eslint@^9.0.0 typescript-eslint@^8.55.0 @typescript-eslint/eslint-plugin@^8.55.0 @typescript-eslint/parser@^8.55.0 eslint-config-prettier eslint-plugin-react prettier babel-preset-expo babel-plugin-module-resolver

@@ -8,7 +8,7 @@ exports.config = {
     platformName: 'Android',
        'appium:deviceName': '10.1.10.112:5555', // emulator name
        'appium:automationName': 'UiAutomator2', // installed UI Automator
-       'appium:app': 'android/app/build/outputs/apk/production/release/app-production-release.apk', // Relative path of the application
+       'appium:app': 'android/app/build/outputs/apk/release/app-release.apk', // Relative path of the application
        'appium:appWaitActivity': '{{BUNDLE_ID}}.MainActivity', // First screen of application
        'appium:androidInstallTimeout': 60000,
        'appium:newCommandTimeout': 2000,
