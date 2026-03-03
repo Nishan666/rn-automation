@@ -60,7 +60,8 @@ function registerStep9(plop) {
         "react-native-gesture-handler": "~2.28.0",
         "react-native-reanimated": "~4.1.1",
         "react-native-safe-area-context": "~5.6.0",
-        "react-native-screens": "~4.16.0"
+        "react-native-screens": "~4.16.0",
+        "text-encoding": "^0.7.0"
       };
       
       // Update devDependencies (using latest versions)
