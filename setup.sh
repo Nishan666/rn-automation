@@ -8,6 +8,43 @@ TEMPLATES_DIR="$SCRIPT_DIR/templates"
 # Source file browser utility
 source "$SCRIPT_DIR/utils/file_browser.sh"
 
+# Function to check and fix React Native version compatibility
+check_and_fix_rn_version() {
+  print_step "Checking React Native version compatibility..."
+  CURRENT_RN_VERSION=$(node -p "require('./package.json').dependencies['react-native']" 2>/dev/null || echo "unknown")
+  print_info "Current React Native version: $CURRENT_RN_VERSION"
+  
+  if [[ "$CURRENT_RN_VERSION" =~ ^[~^]?0\.(7[7-9]|8[0-9]|9[0-9]) ]] || [[ "$CURRENT_RN_VERSION" =~ ^[~^]?[1-9][0-9]*\. ]]; then
+    print_warning "React Native $CURRENT_RN_VERSION is not compatible with Expo SDK 52"
+    print_info "Expo SDK 52 requires React Native 0.76.x"
+    echo ""
+    echo -e "${BOLD}Fix React Native version automatically?${NC}"
+    read -p "🔧 (y/n): " FIX_VERSION
+    
+    if [ "$FIX_VERSION" = "y" ] || [ "$FIX_VERSION" = "Y" ]; then
+      cp package.json package.json.backup
+      if command -v jq >/dev/null 2>&1; then
+        cat package.json | jq '.dependencies["react-native"] = "0.76.5" | .dependencies["expo"] = "^52.0.0" | .dependencies["react"] = "18.3.1"' > package.json.tmp
+        mv package.json.tmp package.json
+        npm cache clean --force 2>/dev/null || true
+        rm -rf node_modules package-lock.json
+        if npm install; then
+          print_success "Fixed! React Native 0.76.5 installed"
+          rm -f package.json.backup
+          rm -rf ~/.npm/_npx 2>/dev/null || true
+          return 0
+        else
+          mv package.json.backup package.json
+          return 1
+        fi
+      fi
+    fi
+    return 1
+  fi
+  print_success "React Native version is compatible"
+  return 0
+}
+
 # Icon info preview function
 show_icon_preview() {
   local icon_path="$1"
@@ -899,6 +936,9 @@ cd "$PROJECT_DIR"
 if npx create-expo-app@latest "$FOLDER_NAME" --template bare-minimum; then
   print_success "Expo project created"
   cd "$FOLDER_NAME"
+  echo ""
+  check_and_fix_rn_version
+  echo "" 
   
   # Verify npm install completed successfully (create-expo-app runs npm install internally)
   if [ ! -d "node_modules" ] || [ ! -d "node_modules/expo" ]; then
@@ -949,8 +989,8 @@ npx expo install @react-native-async-storage/async-storage
 npm install --save-dev --legacy-peer-deps eslint@^9.0.0 typescript-eslint@^8.55.0 @typescript-eslint/eslint-plugin@^8.55.0 @typescript-eslint/parser@^8.55.0 eslint-config-prettier eslint-plugin-react prettier babel-preset-expo babel-plugin-module-resolver
 
 # Testing dependencies
-npm install --save-dev jest @testing-library/react-native@^12.4.0 @testing-library/jest-native react-test-renderer@19.1.0
-
+# npm install --save-dev jest @testing-library/react-native@^12.4.0 @testing-library/jest-native react-test-renderer@19.1.0
+npm install --save-dev jest @testing-library/react-native@^12.4.0 @testing-library/jest-native react-test-renderer@18.3.1
 # TypeScript types
 npx expo install @types/react
 
