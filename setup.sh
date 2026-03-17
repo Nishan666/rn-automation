@@ -802,7 +802,7 @@ to_package_name() {
 FOLDER_NAME=$(to_folder_name "$PROJECT_NAME")
 
 echo ""
-echo -e "${BOLD}Android application ID (package name)${NC}"
+echo -e "${BOLD}Android/IOS application ID (package name)${NC}"
 echo -e "${PURPLE}Auto-generated from app name: com.$(to_package_name "$APP_NAME")${NC}"
 echo -e "${PURPLE}Example: 'Test App' → com.testapp${NC}"
 echo -e "  ${YELLOW}1)${NC} Use auto-generated"
@@ -1160,150 +1160,6 @@ mv "$TEMP_JSON" "$PACKAGE_JSON"
 # Remove default App.js if it exists
 [ -f "App.js" ] && rm -f App.js
 
-# WebdriverIO Setup (Last Step)
-echo ""
-echo -e "${BOLD}Set up WebdriverIO for mobile automation testing?${NC}"
-echo -e "${PURPLE}This will configure Appium and WebdriverIO for E2E testing${NC}"
-read -p "🤖 (y/n): " SETUP_WDIO
-
-if [ "$SETUP_WDIO" = "y" ] || [ "$SETUP_WDIO" = "Y" ]; then
-  print_step "Setting up WebdriverIO..."
-  echo ""
-  print_info "Running WebdriverIO configuration with predefined settings..."
-  echo ""
-  
-  # Run wdio config with predefined answers using expect
-  if command -v expect >/dev/null 2>&1; then
-    expect << 'EOF' || true
-set timeout 300
-log_user 1
-
-spawn npx wdio config
-
-expect {
-    "Ok to proceed?" { 
-        send "y\r"
-        exp_continue
-    }
-    -re "correct.*\\(Y/n\\)" { 
-        send "\r"
-        exp_continue
-    }
-    -re "What type of testing.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Where is your automation backend.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Which environment.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Which mobile environment.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Which framework.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Do you want to use Typescript.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Do you want WebdriverIO to autogenerate.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "What should be the location of your feature files.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "What should be the location of your step definitions.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Do you want to use page objects.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Where are your page objects located.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Which reporter.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Do you want to add a plugin.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Would you like to include Visual Testing.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Do you want to add a service.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Do you want me to run.*npm install.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Continue with Appium setup.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Select an option.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Choose your version.*" { 
-        send "\r"
-        exp_continue
-    }
-    -re "Select an option.*" { 
-        send "Exit\r"
-        exp_continue
-    }
-    eof
-}
-EOF
-    
-    # Small delay to ensure files are written
-    sleep 1
-    
-    # Check if wdio.conf.js was created (indicates success)
-    if [ -f "wdio.conf.js" ]; then
-      # Copy template and replace bundle ID placeholder
-      if [ -f "$SCRIPT_DIR/templates/wdio.config.js" ]; then
-        sed "s/{{BUNDLE_ID}}/$ANDROID_APP_ID/g" "$SCRIPT_DIR/templates/wdio.config.js" > "wdio.conf.js"
-        print_info "Configured wdio.conf.js with bundle ID: $ANDROID_APP_ID"
-      fi
-      [ -d "test/specs" ] && rm -rf "test/specs" || true
-      print_info "Installing WebdriverIO dependencies..."
-      npm install --save-dev @wdio/cucumber-framework @wdio/appium-service >/dev/null 2>&1 || true
-      print_info "Installing Appium uiautomator2 driver..."
-      npx appium driver install uiautomator2 >/dev/null 2>&1 || true
-      print_success "WebdriverIO setup complete!"
-      echo ""
-      print_info "Configuration files created:"
-      echo -e "  ${GREEN}✓${NC} wdio.conf.js"
-      [ -d "test" ] && echo -e "  ${GREEN}✓${NC} test/ directory" || true
-    else
-      print_warning "WebdriverIO setup may have encountered issues."
-    fi
-  else
-    print_warning "'expect' command not found. Running interactive mode..."
-    npx wdio config
-  fi
-else
-  print_info "Skipping WebdriverIO setup."
-fi
-
 # iOS Setup
 echo ""
 echo -e "${BOLD}Configure iOS support?${NC}"
@@ -1488,7 +1344,79 @@ RUBYEOF
               rm -f "${PODFILE}.bak" 2>/dev/null || true
               print_success "Removed problematic line from Podfile"
             fi
-            
+
+            # Fix AppDelegate.swift for Expo 55 compatibility:
+            # 1. Use 'internal import' to avoid ambiguous access level build errors
+            # 2. Remove bindReactNativeFactory/startReactNative (don't exist in Expo 55)
+            # 3. Simplify to the minimal correct pattern ExpoAppDelegate expects
+            APP_NAME=$(basename "$PWD")
+            APPDELEGATE_SWIFT="ios/${APP_NAME}/AppDelegate.swift"
+            if [ -f "$APPDELEGATE_SWIFT" ]; then
+              if grep -q "^import Expo$\|^import ExpoModulesCore$\|bindReactNativeFactory\|startReactNative" "$APPDELEGATE_SWIFT"; then
+                print_info "Rewriting AppDelegate.swift for Expo 55 compatibility..."
+                cat > "$APPDELEGATE_SWIFT" << 'APPDELEGATE_EOF'
+internal import Expo
+internal import ExpoModulesCore
+import React
+import ReactAppDependencyProvider
+import UIKit
+
+@main
+class AppDelegate: ExpoAppDelegate {
+
+  override func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // Linking API
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
+  ) -> Bool {
+    return super.application(app, open: url, options: options) || RCTLinkingManager.application(app, open: url, options: options)
+  }
+
+  // Universal Links
+  override func application(
+    _ application: UIApplication,
+    continue userActivity: NSUserActivity,
+    restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+  ) -> Bool {
+    let result = RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
+    return super.application(application, continue: userActivity, restorationHandler: restorationHandler) || result
+  }
+}
+
+class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
+
+  override func sourceURL(for bridge: RCTBridge) -> URL? {
+    bridge.bundleURL ?? bundleURL()
+  }
+
+  override func bundleURL() -> URL? {
+#if DEBUG
+    RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
+#else
+    Bundle.main.url(forResource: "main", withExtension: "jsbundle")
+#endif
+  }
+}
+APPDELEGATE_EOF
+                print_success "Rewrote AppDelegate.swift for Expo 55"
+
+                # Clear stale Xcode module cache to avoid RCTDeprecation/module map errors
+                if [ -d "$HOME/Library/Developer/Xcode/DerivedData/ModuleCache.noindex" ]; then
+                  print_info "Clearing stale Xcode module cache..."
+                  rm -rf "$HOME/Library/Developer/Xcode/DerivedData/ModuleCache.noindex" 2>/dev/null || true
+                  print_success "Xcode module cache cleared"
+                fi
+              fi
+            fi
+
             # Pod install
             print_info "Installing CocoaPods dependencies..."
             if npx pod-install --non-interactive 2>/dev/null; then
@@ -1734,6 +1662,150 @@ else
       print_info "💡 Tip: You can set up icons later by running: ./setup_ios_icons.sh"
     fi
   fi
+fi
+
+# WebdriverIO Setup (Last Step)
+echo ""
+echo -e "${BOLD}Set up WebdriverIO for mobile automation testing?${NC}"
+echo -e "${PURPLE}This will configure Appium and WebdriverIO for E2E testing${NC}"
+read -p "🤖 (y/n): " SETUP_WDIO
+
+if [ "$SETUP_WDIO" = "y" ] || [ "$SETUP_WDIO" = "Y" ]; then
+  print_step "Setting up WebdriverIO..."
+  echo ""
+  print_info "Running WebdriverIO configuration with predefined settings..."
+  echo ""
+
+  # Run wdio config with predefined answers using expect
+  if command -v expect >/dev/null 2>&1; then
+    expect << 'EOF' || true
+set timeout 300
+log_user 1
+
+spawn npx wdio config
+
+expect {
+    "Ok to proceed?" {
+        send "y\r"
+        exp_continue
+    }
+    -re "correct.*\\(Y/n\\)" {
+        send "\r"
+        exp_continue
+    }
+    -re "What type of testing.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Where is your automation backend.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Which environment.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Which mobile environment.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Which framework.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to use Typescript.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want WebdriverIO to autogenerate.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "What should be the location of your feature files.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "What should be the location of your step definitions.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to use page objects.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Where are your page objects located.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Which reporter.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to add a plugin.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Would you like to include Visual Testing.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want to add a service.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Do you want me to run.*npm install.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Continue with Appium setup.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Select an option.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Choose your version.*" {
+        send "\r"
+        exp_continue
+    }
+    -re "Select an option.*" {
+        send "Exit\r"
+        exp_continue
+    }
+    eof
+}
+EOF
+
+    # Small delay to ensure files are written
+    sleep 1
+
+    # Check if wdio.conf.js was created (indicates success)
+    if [ -f "wdio.conf.js" ]; then
+      # Copy template and replace bundle ID placeholder
+      if [ -f "$SCRIPT_DIR/templates/wdio.config.js" ]; then
+        sed "s/{{BUNDLE_ID}}/$ANDROID_APP_ID/g" "$SCRIPT_DIR/templates/wdio.config.js" > "wdio.conf.js"
+        print_info "Configured wdio.conf.js with bundle ID: $ANDROID_APP_ID"
+      fi
+      [ -d "test/specs" ] && rm -rf "test/specs" || true
+      print_info "Installing WebdriverIO dependencies..."
+      npm install --save-dev @wdio/cucumber-framework @wdio/appium-service >/dev/null 2>&1 || true
+      print_info "Installing Appium uiautomator2 driver..."
+      npx appium driver install uiautomator2 >/dev/null 2>&1 || true
+      print_success "WebdriverIO setup complete!"
+      echo ""
+      print_info "Configuration files created:"
+      echo -e "  ${GREEN}✓${NC} wdio.conf.js"
+      [ -d "test" ] && echo -e "  ${GREEN}✓${NC} test/ directory" || true
+    else
+      print_warning "WebdriverIO setup may have encountered issues."
+    fi
+  else
+    print_warning "'expect' command not found. Running interactive mode..."
+    npx wdio config
+  fi
+else
+  print_info "Skipping WebdriverIO setup."
 fi
 
 echo ""
