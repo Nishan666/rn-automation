@@ -1494,6 +1494,27 @@ if [ "$SETUP_ICONS" = "y" ] || [ "$SETUP_ICONS" = "Y" ]; then
       ICON_PATH=$(browse_files "$HOME" "png|PNG" "file")
       
       if [ $? -eq 0 ] && [ -n "$ICON_PATH" ] && [ -f "$ICON_PATH" ]; then
+        # Validate icon dimensions (must be 1024x1024)
+        ICON_WIDTH=""
+        ICON_HEIGHT=""
+        if command -v sips >/dev/null 2>&1; then
+          ICON_WIDTH=$(sips -g pixelWidth "$ICON_PATH" 2>/dev/null | awk '/pixelWidth/ {print $2}')
+          ICON_HEIGHT=$(sips -g pixelHeight "$ICON_PATH" 2>/dev/null | awk '/pixelHeight/ {print $2}')
+        elif command -v identify >/dev/null 2>&1; then
+          ICON_WIDTH=$(identify -format "%w" "$ICON_PATH" 2>/dev/null)
+          ICON_HEIGHT=$(identify -format "%h" "$ICON_PATH" 2>/dev/null)
+        fi
+
+        if [ -n "$ICON_WIDTH" ] && [ -n "$ICON_HEIGHT" ]; then
+          if [ "$ICON_WIDTH" != "1024" ] || [ "$ICON_HEIGHT" != "1024" ]; then
+            print_error "Invalid icon size: ${ICON_WIDTH}x${ICON_HEIGHT}px"
+            echo -e "${YELLOW}⚠ The icon for '${env}' must be exactly 1024x1024 pixels.${NC}"
+            echo -e "${PURPLE}Please select a different PNG file with the correct dimensions.${NC}"
+            echo ""
+            continue
+          fi
+        fi
+
         echo ""
         echo -e "${CYAN}Preview of selected icon:${NC}"
         echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
