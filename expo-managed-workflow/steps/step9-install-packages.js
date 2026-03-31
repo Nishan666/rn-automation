@@ -47,32 +47,34 @@ function registerStep9(plop) {
       
       // Update dependencies (using latest versions)
       packageJson.dependencies = {
-        "@react-navigation/drawer": "^7.0.0",
-        "@react-navigation/native": "^7.0.0",
-        "dotenv": "^16.4.5",
-        "expo": "^54.0.0",
-        "expo-font": "~14.0.10",
-        "expo-linking": "^8.0.11",
-        "expo-notifications": "~0.32.15",
-        "expo-status-bar": "~3.0.9",
-        "react": "^19.1.0",
-        "react-native": "^0.81.5",
-        "react-native-gesture-handler": "~2.28.0",
-        "react-native-reanimated": "~4.1.1",
-        "react-native-safe-area-context": "~5.6.0",
-        "react-native-screens": "~4.16.0",
+        "@react-navigation/drawer": "^7.9.8",
+        "@react-navigation/native": "^7.2.2",
+        "dotenv": "^17.3.1",
+        "expo": "^55.0.9",
+        "expo-font": "^55.0.4",
+        "expo-linking": "^55.0.9",
+        "expo-notifications": "^55.0.14",
+        "expo-status-bar": "^55.0.4",
+        "react": "19.2.0",
+        "react-native": "0.83.4",
+        "react-native-gesture-handler": "^2.30.1",
+        "react-native-reanimated": "4.2.1",
+        "react-native-safe-area-context": "~5.6.2",
+        "react-native-screens": "~4.23.0",
+        "react-native-worklets": "0.7.4",
         "text-encoding": "^0.7.0"
       };
-      
+
       // Update devDependencies (using latest versions)
       packageJson.devDependencies = {
-        "@types/react": "~19.1.10",
-        "eslint-config-expo": "~10.0.0",
+        "@types/node": "^25.5.0",
+        "@types/react": "^19.2.14",
+        "eslint-config-expo": "^55.0.0",
         "eslint-config-prettier": "^10.1.8",
-        "eslint-plugin-prettier": "^5.5.4",
+        "eslint-plugin-prettier": "^5.5.5",
         "eslint-plugin-react-compiler": "^19.1.0-rc.2",
-        "prettier": "^3.7.4",
-        "typescript": "^5.9.2"
+        "prettier": "^3.8.1",
+        "typescript": "^6.0.2"
       };
       
       // Write updated package.json
