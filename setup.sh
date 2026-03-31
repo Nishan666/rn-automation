@@ -802,31 +802,31 @@ to_package_name() {
 FOLDER_NAME=$(to_folder_name "$PROJECT_NAME")
 
 echo ""
-echo -e "${BOLD}Android/IOS application ID (package name)${NC}"
+echo -e "${BOLD}Android/IOS application ID (package name / bundle ID)${NC}"
 echo -e "${PURPLE}Auto-generated from app name: com.$(to_package_name "$APP_NAME")${NC}"
 echo -e "${PURPLE}Example: 'Test App' → com.testapp${NC}"
 echo -e "  ${YELLOW}1)${NC} Use auto-generated"
-echo -e "  ${YELLOW}2)${NC} Enter custom package name"
+echo -e "  ${YELLOW}2)${NC} Enter custom package name/bundle ID"
 read -p "📱 Enter choice (1-2): " PACKAGE_CHOICE
 
 if [ "$PACKAGE_CHOICE" = "2" ]; then
   while true; do
     echo ""
-    echo -e "${BOLD}Enter custom Android package name:${NC}"
+    echo -e "${BOLD}Enter custom package name / bundle ID:${NC}"
     echo -e "${YELLOW}Example: com.company.myapp${NC}"
     read -p "📦 " CUSTOM_APP_ID
     if [ -z "$CUSTOM_APP_ID" ]; then
-      print_error "Package name cannot be empty"
+      print_error "Package name / bundle ID cannot be empty"
     else
       # Convert to lowercase
       CUSTOM_APP_ID=$(echo "$CUSTOM_APP_ID" | tr '[:upper:]' '[:lower:]')
       # Validate format
       if [[ "$CUSTOM_APP_ID" =~ ^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$ ]]; then
         ANDROID_APP_ID="$CUSTOM_APP_ID"
-        print_success "Package name set: $ANDROID_APP_ID"
+        print_success "Package name / bundle ID set: $ANDROID_APP_ID"
         break
       else
-        print_error "Invalid package name format. Must be like: com.company.appname"
+        print_error "Invalid package name / bundle ID format. Must be like: com.company.appname"
       fi
     fi
   done
@@ -852,7 +852,7 @@ echo -e "${CYAN}${BOLD}===================================${NC}"
 echo -e "${BOLD}Project Name:${NC} $PROJECT_NAME"
 echo -e "${BOLD}Folder Name:${NC} $FOLDER_NAME"
 echo -e "${BOLD}App Name:${NC} $DISPLAY_NAME"
-echo -e "${BOLD}Android ID:${NC} $ANDROID_APP_ID"
+echo -e "${BOLD}Package Name / Bundle ID:${NC} $ANDROID_APP_ID"
 echo -e "  ${YELLOW}• Develop:${NC} $DEVELOP_APP_ID"
 echo -e "  ${YELLOW}• QA:${NC} $QA_APP_ID"
 echo -e "  ${YELLOW}• Preprod:${NC} $PREPROD_APP_ID"
@@ -1343,78 +1343,6 @@ RUBYEOF
               sed -i.bak "/RCT_USE_PREBUILT_RNCORE/d" "$PODFILE" 2>/dev/null || true
               rm -f "${PODFILE}.bak" 2>/dev/null || true
               print_success "Removed problematic line from Podfile"
-            fi
-
-            # Fix AppDelegate.swift for Expo 55 compatibility:
-            # 1. Use 'internal import' to avoid ambiguous access level build errors
-            # 2. Remove bindReactNativeFactory/startReactNative (don't exist in Expo 55)
-            # 3. Simplify to the minimal correct pattern ExpoAppDelegate expects
-            APP_NAME=$(basename "$PWD")
-            APPDELEGATE_SWIFT="ios/${APP_NAME}/AppDelegate.swift"
-            if [ -f "$APPDELEGATE_SWIFT" ]; then
-              if grep -q "^import Expo$\|^import ExpoModulesCore$\|bindReactNativeFactory\|startReactNative" "$APPDELEGATE_SWIFT"; then
-                print_info "Rewriting AppDelegate.swift for Expo 55 compatibility..."
-                cat > "$APPDELEGATE_SWIFT" << 'APPDELEGATE_EOF'
-internal import Expo
-internal import ExpoModulesCore
-import React
-import ReactAppDependencyProvider
-import UIKit
-
-@main
-class AppDelegate: ExpoAppDelegate {
-
-  override func application(
-    _ application: UIApplication,
-    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
-  ) -> Bool {
-    return super.application(application, didFinishLaunchingWithOptions: launchOptions)
-  }
-
-  // Linking API
-  override func application(
-    _ app: UIApplication,
-    open url: URL,
-    options: [UIApplication.OpenURLOptionsKey: Any] = [:]
-  ) -> Bool {
-    return super.application(app, open: url, options: options) || RCTLinkingManager.application(app, open: url, options: options)
-  }
-
-  // Universal Links
-  override func application(
-    _ application: UIApplication,
-    continue userActivity: NSUserActivity,
-    restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
-  ) -> Bool {
-    let result = RCTLinkingManager.application(application, continue: userActivity, restorationHandler: restorationHandler)
-    return super.application(application, continue: userActivity, restorationHandler: restorationHandler) || result
-  }
-}
-
-class ReactNativeDelegate: ExpoReactNativeFactoryDelegate {
-
-  override func sourceURL(for bridge: RCTBridge) -> URL? {
-    bridge.bundleURL ?? bundleURL()
-  }
-
-  override func bundleURL() -> URL? {
-#if DEBUG
-    RCTBundleURLProvider.sharedSettings().jsBundleURL(forBundleRoot: "index")
-#else
-    Bundle.main.url(forResource: "main", withExtension: "jsbundle")
-#endif
-  }
-}
-APPDELEGATE_EOF
-                print_success "Rewrote AppDelegate.swift for Expo 55"
-
-                # Clear stale Xcode module cache to avoid RCTDeprecation/module map errors
-                if [ -d "$HOME/Library/Developer/Xcode/DerivedData/ModuleCache.noindex" ]; then
-                  print_info "Clearing stale Xcode module cache..."
-                  rm -rf "$HOME/Library/Developer/Xcode/DerivedData/ModuleCache.noindex" 2>/dev/null || true
-                  print_success "Xcode module cache cleared"
-                fi
-              fi
             fi
 
             # Pod install
